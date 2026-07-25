@@ -14,6 +14,8 @@ import com.mudita.mmd.components.text.TextMMD
 fun SearchScreen(
     localSongs: List<SongUiModel>,
     onPlaySongClick: (SongUiModel) -> Unit,
+    onAddToPlaylistClick: (SongUiModel) -> Unit = {},
+    onDeleteClick: (SongUiModel) -> Unit = {},
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -25,6 +27,8 @@ fun SearchScreen(
                             song = song,
                             isCurrentlyPlaying = false,
                             onClick = { onPlaySongClick(song) },
+                            onAddToPlaylist = { onAddToPlaylistClick(song) },
+                            onDelete = { onDeleteClick(song) },
                             showDivider = song != localSongs.lastOrNull(),
                             isInLibrary = true,
                         )

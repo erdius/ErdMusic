@@ -1013,6 +1013,8 @@ fun CalmMusic(app: CalmMusic) {
                             val startIndex = if (index >= 0) index else 0
                             startPlaybackFromQueue(searchLocalSongs, startIndex)
                         },
+                        onAddToPlaylistClick = onAddToPlaylist,
+                        onDeleteClick = onDelete,
                     )
                 }
                 composable(Screen.AlbumDetails.route) {
@@ -1027,6 +1029,8 @@ fun CalmMusic(app: CalmMusic) {
                         onShuffleClick = { songs ->
                             startShuffledPlaybackFromQueue(songs)
                         },
+                        onAddToPlaylistClick = onAddToPlaylist,
+                        onDeleteClick = onDelete,
                         librarySongIds = librarySongIds,
                     )
                 }
@@ -1046,6 +1050,8 @@ fun CalmMusic(app: CalmMusic) {
                         onShuffleSongsClick = { songs ->
                             startShuffledPlaybackFromQueue(songs)
                         },
+                        onAddToPlaylistClick = onAddToPlaylist,
+                        onDeleteClick = onDelete,
                     )
                 }
 
