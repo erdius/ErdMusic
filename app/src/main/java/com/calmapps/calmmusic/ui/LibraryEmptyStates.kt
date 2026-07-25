@@ -16,14 +16,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mudita.mmd.components.buttons.ButtonMMD
-import com.mudita.mmd.components.buttons.OutlinedButtonMMD
 import com.mudita.mmd.components.text.TextMMD
 
 @Composable
 fun LibraryOnboardingEmptyState(
     title: String,
     body: String,
-    onOpenStreamingSettingsClick: () -> Unit,
     onOpenLocalSettingsClick: () -> Unit,
 ) {
     Column(
@@ -54,24 +52,10 @@ fun LibraryOnboardingEmptyState(
         ButtonMMD(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(12.dp),
-            onClick = onOpenStreamingSettingsClick,
-        ) {
-            TextMMD(
-                text = "Set up streaming",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedButtonMMD(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(12.dp),
             onClick = onOpenLocalSettingsClick,
         ) {
             TextMMD(
-                text = "Set up local",
+                text = "Set up local folders",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
             )

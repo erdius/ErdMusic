@@ -409,14 +409,6 @@ class SystemOverlayService : Service() {
     }
 
     private fun stopPlayback() {
-        val app = application as? CalmMusic
-
-        try {
-            app?.appleMusicPlayer?.pause()
-        } catch (_: Exception) {
-            // Ignore
-        }
-
         try {
             val context = this
             val sessionToken = SessionToken(

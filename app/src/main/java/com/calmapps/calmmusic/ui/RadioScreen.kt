@@ -101,7 +101,7 @@ fun RadioScreen(
         ) {
             PermissionSheetContent(
                 title = "Control Permission Required",
-                description = "To control the FM Radio tuner, CalmMusic requires the Accessibility Service permission. Please enable 'CalmMusic Helper' in the settings.",
+                description = "To control the FM Radio tuner, ErdMusic requires the Accessibility Service permission. Please enable 'ErdMusic Helper' in the settings.",
                 buttonText = "Open Accessibility Settings",
                 onConfirm = {
                     showAccessibilitySheet = false
@@ -121,7 +121,7 @@ fun RadioScreen(
         ) {
             PermissionSheetContent(
                 title = "Read Status Permission",
-                description = "To see the current radio frequency and status, CalmMusic needs to read the 'Now Playing' notification from the radio app. Please allow 'Notification Access' for CalmMusic.",
+                description = "To see the current radio frequency and status, ErdMusic needs to read the 'Now Playing' notification from the radio app. Please allow 'Notification Access' for ErdMusic.",
                 buttonText = "Open Notification Settings",
                 onConfirm = {
                     showNotificationSheet = false

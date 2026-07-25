@@ -36,7 +36,6 @@ fun ArtistsScreen(
     errorMessage: String?,
     isSyncInProgress: Boolean,
     hasAnySongs: Boolean,
-    onOpenStreamingSettingsClick: () -> Unit,
     onOpenLocalSettingsClick: () -> Unit,
     onArtistClick: (ArtistUiModel) -> Unit,
 ) {
@@ -80,8 +79,7 @@ fun ArtistsScreen(
                     if (!hasAnySongs) {
                         LibraryOnboardingEmptyState(
                             title = "No artists yet",
-                            body = "Connect Apple Music or choose local folders in Settings to start building your library.",
-                            onOpenStreamingSettingsClick = onOpenStreamingSettingsClick,
+                            body = "Choose local folders in Settings to start building your library.",
                             onOpenLocalSettingsClick = onOpenLocalSettingsClick,
                         )
                     } else {

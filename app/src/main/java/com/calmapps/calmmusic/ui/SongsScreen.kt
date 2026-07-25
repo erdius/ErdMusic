@@ -25,7 +25,7 @@ data class SongUiModel(
     val durationMillis: Long? = null,
     val discNumber: Int? = null,
     val trackNumber: Int? = null,
-    val sourceType: String = "APPLE_MUSIC",
+    val sourceType: String = "LOCAL_FILE",
     val audioUri: String? = null,
     val album: String? = null,
 )
@@ -42,7 +42,6 @@ fun SongsScreen(
     onAddToPlaylistClick: (SongUiModel) -> Unit,
     onRemoveFromLibraryClick: (SongUiModel) -> Unit,
     onDeleteClick: (SongUiModel) -> Unit,
-    onOpenStreamingSettingsClick: () -> Unit,
     onOpenLocalSettingsClick: () -> Unit,
 ) {
     Box(
@@ -86,8 +85,7 @@ fun SongsScreen(
                 ) {
                     LibraryOnboardingEmptyState(
                         title = "No songs yet",
-                        body = "Connect Apple Music or choose local folders in Settings to start building your library.",
-                        onOpenStreamingSettingsClick = onOpenStreamingSettingsClick,
+                        body = "Choose local folders in Settings to start building your library.",
                         onOpenLocalSettingsClick = onOpenLocalSettingsClick,
                     )
                 }

@@ -65,7 +65,6 @@ import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
@@ -78,14 +77,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.calmapps.calmmusic.data.StreamingProvider
 import com.calmapps.calmmusic.overlay.SystemOverlayService
 import com.calmapps.calmmusic.ui.AlbumDetailsScreen
 import com.calmapps.calmmusic.ui.AlbumUiModel
 import com.calmapps.calmmusic.ui.AlbumsScreen
 import com.calmapps.calmmusic.ui.ArtistDetailsScreen
 import com.calmapps.calmmusic.ui.ArtistsScreen
-import com.calmapps.calmmusic.ui.DownloadsScreen
 import com.calmapps.calmmusic.ui.MoreScreen
 import com.calmapps.calmmusic.ui.NowPlayingScreen
 import com.calmapps.calmmusic.ui.PermissionsOnboardingScreen
@@ -145,22 +142,9 @@ class MainActivity : ComponentActivity() {
         app.playbackStateManager.setAppForegroundState(true)
     }
 
-    @Deprecated("Use Activity Result API")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-
-        if (requestCode == REQUEST_CODE_APPLE_MUSIC_AUTH && resultCode == RESULT_OK) {
-            app.appleMusicAuthManager.handleAuthResult(data)
-        }
-    }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-    }
-
-    companion object {
-        internal const val REQUEST_CODE_APPLE_MUSIC_AUTH = 1001
     }
 }
 
@@ -176,7 +160,6 @@ fun CalmMusic(app: CalmMusic) {
     val currentDestination = navBackStackEntry?.destination
     val activity = context as? Activity
     val appContext = context.applicationContext
-    val searchScope = rememberCoroutineScope()
     val playlistScope = rememberCoroutineScope()
     val libraryScope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
@@ -186,41 +169,27 @@ fun CalmMusic(app: CalmMusic) {
 
     val viewModel: CalmMusicViewModel = viewModel(factory = CalmMusicViewModel.factory(app))
     val playbackState by viewModel.playbackState.collectAsState()
-    val downloadStatuses by app.youTubeDownloadManager.downloads.collectAsState()
 
     var localMediaController by remember { mutableStateOf<MediaController?>(null) }
-    var lastCompletedDownloadUUIDs by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val externalMediaState by ExternalMediaRepository.mediaState.collectAsState()
     val showExternalControls = externalMediaState.hasActiveSession && playbackState.nowPlayingSong == null
-
-    LaunchedEffect(downloadStatuses) {
-        val currentCompletedDownloads = downloadStatuses
-            .filter { it.state == YouTubeDownloadStatus.State.COMPLETED }
-
-        val currentCompletedUUIDs = currentCompletedDownloads.map { it.id }.toSet()
-        val newCompletedUUIDs = currentCompletedUUIDs - lastCompletedDownloadUUIDs
-
-        if (newCompletedUUIDs.isNotEmpty()) {
-            viewModel.refreshLibraryFromDatabase()
-
-            val newSongIds = currentCompletedDownloads
-                .filter { it.id in newCompletedUUIDs }
-                .map { it.songId }
-
-            newSongIds.forEach { songId ->
-                viewModel.onSongDownloaded(songId, localMediaController)
-            }
-        }
-        lastCompletedDownloadUUIDs = currentCompletedUUIDs
-    }
 
     val includeLocalMusicState = settingsManager.includeLocalMusic.collectAsState()
     val localMusicFoldersState = settingsManager.localMusicFolders.collectAsState()
     val includeLocalMusic = includeLocalMusicState.value
     val localMusicFolders = localMusicFoldersState.value
-    val completeAlbumsWithYouTubeState = settingsManager.completeAlbumsWithYouTube.collectAsState()
-    val completeAlbumsWithYouTube = completeAlbumsWithYouTubeState.value
+    val tabSettings by settingsManager.tabSettings.collectAsState()
+    val visibleNavItems = remember(tabSettings) {
+        tabSettings
+            .filter { it.visible }
+            .mapNotNull { setting -> navItems.find { it.route == setting.route } }
+            .ifEmpty { navItems }
+    }
+    val startDestination = remember {
+        settingsManager.getTabSettingsSync()
+            .firstOrNull { it.visible }?.route ?: Screen.Songs.route
+    }
     var hasOverlayPermission by rememberSaveable { mutableStateOf(Settings.canDrawOverlays(context)) }
     var hasBatteryOptimizationExemption by rememberSaveable { mutableStateOf(false) }
     var hasCompletedPermissionsOnboarding by rememberSaveable {
@@ -274,7 +243,6 @@ fun CalmMusic(app: CalmMusic) {
 
     val playlistsViewModel: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.factory(app))
 
-    val overlayState by app.playbackStateManager.state.collectAsState()
     val addToPlaylistSheetState: SheetStateMMD = rememberModalBottomSheetMMDState(
         skipPartiallyExpanded = true,
     )
@@ -286,18 +254,6 @@ fun CalmMusic(app: CalmMusic) {
     )
 
     val canNavigateBack = navController.previousBackStackEntry != null
-    val streamingProviderState = settingsManager.streamingProvider.collectAsState()
-    val streamingProvider = streamingProviderState.value
-    var isAuthenticated by remember { mutableStateOf(app.tokenProvider.getUserToken().isNotEmpty()) }
-
-    val isStreamingAvailable by remember(streamingProvider, isAuthenticated) {
-        derivedStateOf {
-            when (streamingProvider) {
-                StreamingProvider.APPLE_MUSIC -> isAuthenticated
-                StreamingProvider.YOUTUBE -> true
-            }
-        }
-    }
 
     val librarySongs by viewModel.librarySongs.collectAsState()
     val librarySongIds = remember(librarySongs) {
@@ -344,12 +300,7 @@ fun CalmMusic(app: CalmMusic) {
     var pendingAddToNewPlaylistSong by remember { mutableStateOf<SongUiModel?>(null) }
 
     var searchQuery by remember { mutableStateOf("") }
-    var searchSongs by remember { mutableStateOf<List<SongUiModel>>(emptyList()) }
-    var searchAlbums by remember { mutableStateOf<List<AlbumUiModel>>(emptyList()) }
     var searchLocalSongs by remember { mutableStateOf<List<SongUiModel>>(emptyList()) }
-    var searchSelectedTab by remember { mutableStateOf(0) }
-    var isSearching by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
 
     var isRescanningLocal by remember { mutableStateOf(false) }
     var localScanProgress by remember { mutableStateOf(0f) }
@@ -369,11 +320,6 @@ fun CalmMusic(app: CalmMusic) {
 
     var settingsSelectedTab by remember { mutableStateOf(0) }
 
-    fun startAppleMusicAuth(activity: Activity) {
-        val intent = app.appleMusicAuthManager.buildSignInIntent()
-        activity.startActivityForResult(intent, MainActivity.REQUEST_CODE_APPLE_MUSIC_AUTH)
-    }
-
     fun performSearch() {
         if (searchQuery.isBlank()) return
 
@@ -382,82 +328,6 @@ fun CalmMusic(app: CalmMusic) {
             song.title.contains(query, ignoreCase = true) ||
                     song.artist.contains(query, ignoreCase = true) ||
                     (song.album?.contains(query, ignoreCase = true) == true)
-        }
-
-        if (!isStreamingAvailable) return
-        if (isSearching) return
-
-        searchScope.launch {
-            isSearching = true
-            searchError = null
-            searchSelectedTab = 0
-            try {
-                when (streamingProvider) {
-                    StreamingProvider.APPLE_MUSIC -> {
-                        val result = app.appleMusicApiClient.searchAll(
-                            term = searchQuery,
-                            storefront = "us",
-                            songLimit = 25,
-                            playlistLimit = 25,
-                        )
-                        searchSongs = result.songs.map {
-                            SongUiModel(
-                                id = it.id,
-                                title = it.name,
-                                artist = it.artistName,
-                                durationText = null,
-                                durationMillis = null,
-                                trackNumber = null,
-                                sourceType = "APPLE_MUSIC",
-                                audioUri = it.id,
-                                album = it.albumName,
-                            )
-                        }
-                        searchAlbums = emptyList()
-                    }
-                    StreamingProvider.YOUTUBE -> {
-                        val songResults = app.youTubeInnertubeClient.searchSongs(
-                            query = searchQuery,
-                            limit = 25,
-                        )
-                        val albumResults = app.youTubeInnertubeClient.searchAlbums(
-                            query = searchQuery,
-                            limit = 25,
-                        )
-                        searchSongs = songResults.map {
-                            SongUiModel(
-                                id = it.videoId,
-                                title = it.title,
-                                artist = it.artist,
-                                durationText = formatDurationMillis(it.durationMillis),
-                                durationMillis = it.durationMillis,
-                                trackNumber = null,
-                                sourceType = "YOUTUBE",
-                                audioUri = it.videoId,
-                                album = it.album,
-                            )
-                        }
-                        searchAlbums = albumResults.map { album ->
-                            AlbumUiModel(
-                                id = album.albumId,
-                                title = album.title,
-                                artist = album.artist,
-                                sourceType = "YOUTUBE",
-                                releaseYear = album.year,
-                            )
-                        }
-
-                        val topVideoIds = songResults.take(5).map { it.videoId }
-                        app.youTubePrecacheManager.precacheSearchResults(topVideoIds)
-                    }
-                }
-            } catch (e: Exception) {
-                searchError = e.message ?: "Search failed"
-                searchSongs = emptyList()
-                searchAlbums = emptyList()
-            } finally {
-                isSearching = false
-            }
         }
     }
 
@@ -496,6 +366,12 @@ fun CalmMusic(app: CalmMusic) {
                 localScanIndexedNewOrUpdated = stats.indexedNewOrUpdated
                 localScanDeletedMissing = stats.deletedMissing
             }
+
+            // Pick up any playlists imported from M3U files during the scan.
+            try {
+                libraryPlaylists = playlistsViewModel.refreshPlaylists()
+            } catch (_: Exception) {
+            }
         } finally {
             isRescanningLocal = false
             isIngestingLocal = false
@@ -518,7 +394,7 @@ fun CalmMusic(app: CalmMusic) {
         val song = queue[startIndex]
         val controller = localMediaController
 
-        val needsLocalController = song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE" || song.sourceType == "YOUTUBE_DOWNLOAD"
+        val needsLocalController = song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE_DOWNLOAD"
         if (needsLocalController && controller == null) {
             libraryScope.launch {
                 snackbarHostState.showSnackbar(
@@ -614,18 +490,6 @@ fun CalmMusic(app: CalmMusic) {
     val onDelete: (SongUiModel) -> Unit = { song ->
         libraryScope.launch {
             when (song.sourceType) {
-                "YOUTUBE" -> {
-                    val download = downloadStatuses.find { it.songId == song.id }
-                    if (download != null) {
-                        app.youTubeDownloadManager.cancelDownload(download.id)
-                        snackbarHostState.showSnackbar(
-                            message = "Deleting download...",
-                            withDismissAction = false,
-                            duration = SnackbarDurationMMD.Short,
-                        )
-                    }
-                }
-
                 "LOCAL_FILE", "YOUTUBE_DOWNLOAD" -> {
                     val success = try {
                         viewModel.deleteLocalMediaSong(song)
@@ -654,8 +518,6 @@ fun CalmMusic(app: CalmMusic) {
     LaunchedEffect(currentDestination) {
         if (currentDestination?.route == Screen.Search.route) {
             focusRequester.requestFocus()
-        } else {
-            app.youTubePrecacheManager.clearSearchWindow()
         }
         if (currentDestination?.route != Screen.Playlists.route && isPlaylistsEditMode) {
             isPlaylistsEditMode = false
@@ -716,40 +578,6 @@ fun CalmMusic(app: CalmMusic) {
     LaunchedEffect(localMediaController) {
         val controller = localMediaController ?: return@LaunchedEffect
         viewModel.startLocalPlaybackMonitoring(controller)
-
-        PlaybackService.registerErrorCallback { error ->
-            var cause: Throwable? = error
-            var lastCause: Throwable? = null
-            while (cause != null && cause !== lastCause) {
-                lastCause = cause
-                cause = cause.cause
-            }
-            val root = lastCause ?: error
-            val className = root.javaClass.name
-            val message = root.message ?: error.message ?: ""
-
-            val isNewPipeContentNotAvailable =
-                className == "org.schabi.newpipe.extractor.exceptions.ContentNotAvailableException" ||
-                        message.contains("page needs to be reloaded", ignoreCase = true) ||
-                        message.contains("ContentNotAvailable", ignoreCase = true)
-
-            if (isNewPipeContentNotAvailable) {
-                libraryScope.launch {
-                    snackbarHostState.showSnackbar(
-                        message = "YouTube reported this track can't be played. Skipping.",
-                        withDismissAction = false,
-                        duration = SnackbarDurationMMD.Short,
-                    )
-                }
-                viewModel.playNextInQueue(controller)
-            }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        app.appleMusicPlayer.setOnCurrentItemChangedListener { appleQueueIndex ->
-            viewModel.updateFromAppleQueueIndex(appleQueueIndex)
-        }
     }
 
     if (shouldShowPermissionsOnboarding) {
@@ -791,27 +619,13 @@ fun CalmMusic(app: CalmMusic) {
         return
     }
 
-    LaunchedEffect(isAuthenticated) {
-        songsError = null
-        albumsError = null
-    }
-
     LaunchedEffect(includeLocalMusic, localMusicFolders) {
         delay(500L)
         resyncLocalLibrary(includeLocalMusic, localMusicFolders)
     }
 
-    val openStreamingSettings: () -> Unit = {
-        // General = 0, Streaming = 1, Local = 2
-        settingsSelectedTab = 1
-        navController.navigate(Screen.Settings.route) {
-            popUpTo(navController.graph.startDestinationId) { saveState = true }
-            launchSingleTop = true
-            restoreState = true
-        }
-    }
-
     val openLocalSettings: () -> Unit = {
+        // General = 0, Tabs = 1, Local = 2
         settingsSelectedTab = 2
         navController.navigate(Screen.Settings.route) {
             popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -911,6 +725,9 @@ fun CalmMusic(app: CalmMusic) {
 
             PlaylistAddSongsScreen(
                 songs = candidateSongs,
+                artists = libraryArtists,
+                viewModel = viewModel,
+                existingSongIds = existingIds,
                 initialSelectedSongIds = playlistAddSongsSelectionIds,
                 onSelectionChanged = { selectedIds ->
                     playlistAddSongsSelectionIds = selectedIds
@@ -1114,6 +931,7 @@ fun CalmMusic(app: CalmMusic) {
             bottomBar = {
                 CalmMusicBottomBar(
                     currentDestination = currentDestination,
+                    tabs = visibleNavItems,
                     onNavigate = { route ->
                         navController.navigate(route) {
                             popUpTo(navController.graph.startDestinationId) { saveState = true }
@@ -1127,7 +945,7 @@ fun CalmMusic(app: CalmMusic) {
         ) { paddingValues ->
             NavHost(
                 navController = navController,
-                startDestination = Screen.Songs.route,
+                startDestination = startDestination,
                 modifier = Modifier.padding(paddingValues),
             ) {
                 playlistsNavGraph()
@@ -1139,7 +957,6 @@ fun CalmMusic(app: CalmMusic) {
                         errorMessage = null,
                         isSyncInProgress = isLibrarySyncInProgress,
                         hasAnySongs = hasAnySongs,
-                        onOpenStreamingSettingsClick = openStreamingSettings,
                         onOpenLocalSettingsClick = openLocalSettings,
                         onArtistClick = { artist ->
                             val artistName = artist.name
@@ -1169,19 +986,16 @@ fun CalmMusic(app: CalmMusic) {
                         onAddToPlaylistClick = onAddToPlaylist,
                         onRemoveFromLibraryClick = onRemoveFromLibrary,
                         onDeleteClick = onDelete,
-                        onOpenStreamingSettingsClick = openStreamingSettings,
                         onOpenLocalSettingsClick = openLocalSettings,
                     )
                 }
                 composable(Screen.Albums.route) {
                     AlbumsScreen(
-                        isAuthenticated = isAuthenticated,
                         albums = libraryAlbums,
                         isLoading = isLoadingAlbums,
                         errorMessage = albumsError,
                         isSyncInProgress = isLibrarySyncInProgress,
                         hasAnySongs = hasAnySongs,
-                        onOpenStreamingSettingsClick = openStreamingSettings,
                         onOpenLocalSettingsClick = openLocalSettings,
                         onAlbumClick = { album ->
                             selectedAlbum = album
@@ -1193,47 +1007,12 @@ fun CalmMusic(app: CalmMusic) {
                 }
                 composable(Screen.Search.route) {
                     SearchScreen(
-                        isAuthenticated = isStreamingAvailable,
-                        isSearching = isSearching,
-                        errorMessage = searchError,
-                        songs = searchSongs,
-                        albums = searchAlbums,
                         localSongs = searchLocalSongs,
-                        selectedTab = searchSelectedTab,
-                        onSelectedTabChange = { searchSelectedTab = it },
                         onPlaySongClick = { song: SongUiModel ->
-                            if (song.sourceType == "LOCAL_FILE") {
-                                val index = searchLocalSongs.indexOfFirst { it.id == song.id }
-                                val startIndex = if (index >= 0) index else 0
-                                startPlaybackFromQueue(searchLocalSongs, startIndex)
-                            } else {
-                                when (streamingProvider) {
-                                    StreamingProvider.APPLE_MUSIC -> {
-                                        viewModel.startPlaybackFromQueue(
-                                            queue = listOf(song),
-                                            startIndex = 0,
-                                            isNewQueue = true,
-                                            localController = localMediaController,
-                                        )
-                                        showNowPlaying = true
-                                    }
-
-                                    StreamingProvider.YOUTUBE -> {
-                                        val songs = searchSongs
-                                        val index = songs.indexOfFirst { it.id == song.id }
-                                        val startIndex = if (index >= 0) index else 0
-                                        startPlaybackFromQueue(songs, startIndex)
-                                    }
-                                }
-                            }
+                            val index = searchLocalSongs.indexOfFirst { it.id == song.id }
+                            val startIndex = if (index >= 0) index else 0
+                            startPlaybackFromQueue(searchLocalSongs, startIndex)
                         },
-                        onAlbumClick = { album: AlbumUiModel ->
-                            selectedAlbum = album
-                            navController.navigate(Screen.AlbumDetails.route) {
-                                launchSingleTop = true
-                            }
-                        },
-                        librarySongIds = librarySongIds,
                     )
                 }
                 composable(Screen.AlbumDetails.route) {
@@ -1272,11 +1051,6 @@ fun CalmMusic(app: CalmMusic) {
 
                 composable(Screen.More.route) {
                     MoreScreen(
-                        onNavigateToDownloads = {
-                            navController.navigate(Screen.Downloads.route) {
-                                launchSingleTop = true
-                            }
-                        },
                         onNavigateToRadio = {
                             navController.navigate(Screen.Radio.route) {
                                 launchSingleTop = true
@@ -1296,16 +1070,6 @@ fun CalmMusic(app: CalmMusic) {
                         onNavigateBack = { navController.popBackStack() },
                         onPausePlayback = { viewModel.togglePlayback(localMediaController) },
                         isAppPlaying = playbackState.isPlaybackPlaying
-                    )
-                }
-
-                composable(Screen.Downloads.route) {
-                    val downloads by app.youTubeDownloadManager.downloads.collectAsStateWithLifecycle()
-
-                    DownloadsScreen(
-                        downloads = downloads,
-                        onCancelDownload = { id -> app.youTubeDownloadManager.cancelDownload(id) },
-                        onClearFinished = { app.youTubeDownloadManager.clearFinishedDownloads() }
                     )
                 }
 
@@ -1365,21 +1129,11 @@ fun CalmMusic(app: CalmMusic) {
                     SettingsScreen(
                         selectedTab = settingsSelectedTab,
                         onSelectedTabChange = { settingsSelectedTab = it },
-                        streamingProvider = streamingProvider,
-                        onStreamingProviderChange = { provider ->
-                            settingsManager.setStreamingProvider(provider)
-                        },
-                        completeAlbumsWithYouTube = completeAlbumsWithYouTube,
-                        onCompleteAlbumsWithYouTubeChange = { enabled ->
-                            settingsManager.setCompleteAlbumsWithYouTube(enabled)
-                        },
+                        tabSettings = tabSettings,
+                        onTabSettingsChange = { settingsManager.setTabSettings(it) },
                         includeLocalMusic = includeLocalMusic,
                         localFolders = localMusicFolders.toList(),
-                        isAppleMusicAuthenticated = isAuthenticated,
                         hasBatteryOptimizationExemption = hasBatteryOptimizationExemption,
-                        onConnectAppleMusicClick = {
-                            activity?.let { startAppleMusicAuth(it) }
-                        },
                         onRequestBatteryOptimizationExemption = { requestBatteryOptimizationExemption() },
                         onIncludeLocalMusicChange = { enabled ->
                             settingsManager.setIncludeLocalMusic(enabled)
@@ -1459,7 +1213,7 @@ fun CalmMusic(app: CalmMusic) {
                 onPlayPauseClick = { togglePlayback() },
                 onSeek = { positionMs ->
                     when (song.sourceType) {
-                        "LOCAL_FILE", "YOUTUBE", "YOUTUBE_DOWNLOAD" -> {
+                        "LOCAL_FILE", "YOUTUBE_DOWNLOAD" -> {
                             localMediaController?.seekTo(positionMs)
                         }
                     }
@@ -1483,61 +1237,8 @@ fun CalmMusic(app: CalmMusic) {
                 onBackClick = { showNowPlaying = false },
                 isVideo = isLocalVideo,
                 player = if (isLocalVideo) localMediaController else null,
-                canDownload = (streamingProvider == StreamingProvider.YOUTUBE && song.sourceType == "YOUTUBE"),
-                isDownloadInProgress = downloadStatuses.any { it.songId == song.id && (it.state == YouTubeDownloadStatus.State.PENDING || it.state == YouTubeDownloadStatus.State.IN_PROGRESS) },
-                onDownloadClick = {
-                    var albumArtist: String? = null
-
-                    if (song.album != null) {
-                        val libraryMatch = libraryAlbums.find {
-                            it.title.equals(song.album, ignoreCase = true)
-                        }
-                        if (libraryMatch != null) {
-                            albumArtist = libraryMatch.artist
-                        } else {
-                            if (selectedAlbum?.title.equals(song.album, ignoreCase = true)) {
-                                albumArtist = selectedAlbum?.artist
-                            }
-                        }
-                    }
-
-                    app.youTubeDownloadManager.enqueueDownload(song, albumArtist)
-                    libraryScope.launch {
-                        snackbarHostState.showSnackbar(
-                            message = "Download started",
-                            withDismissAction = false,
-                            duration = SnackbarDurationMMD.Short,
-                        )
-                    }
-                },
-                onCancelDownloadClick = {
-                    val active = downloadStatuses.firstOrNull { it.songId == song.id && (it.state == YouTubeDownloadStatus.State.PENDING || it.state == YouTubeDownloadStatus.State.IN_PROGRESS) }
-                    if (active != null) {
-                        app.youTubeDownloadManager.cancelDownload(active.id)
-                    }
-                },
-                canAddToLibrary = (streamingProvider == StreamingProvider.YOUTUBE && song.sourceType == "YOUTUBE" && !isInLibrary),
-                onAddToLibraryClick = {
-                    libraryScope.launch {
-                        try {
-                            viewModel.addStreamingSongToLibrary(song)
-                            snackbarHostState.showSnackbar(
-                                message = "Added to library",
-                                withDismissAction = false,
-                                duration = SnackbarDurationMMD.Short,
-                            )
-                        } catch (_: Exception) {
-                            snackbarHostState.showSnackbar(
-                                message = "Couldn't add to library",
-                                withDismissAction = false,
-                                duration = SnackbarDurationMMD.Short,
-                            )
-                        }
-                    }
-                },
                 isInLibrary = isInLibrary,
                 sourceType = song.sourceType,
-                streamResolverLabel = if (song.sourceType == "YOUTUBE") overlayState.streamResolverLabel else null,
             )
         }
 
@@ -1985,7 +1686,6 @@ fun getAppBarTitle(currentDestination: NavDestination?): String {
         currentDestination?.route == Screen.Search.route -> "Search"
         currentDestination?.route == Screen.More.route -> "More"
         currentDestination?.route == Screen.Radio.route -> "Radio"
-        currentDestination?.route == Screen.Downloads.route -> "Downloads"
         currentDestination?.route == Screen.Settings.route -> "Settings"
         currentDestination?.route == Screen.PlaylistEdit.route -> "Edit Playlist"
         currentDestination?.route == Screen.PlaylistAddSongs.route -> "Add Songs"

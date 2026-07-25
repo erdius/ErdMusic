@@ -21,6 +21,7 @@ class LibraryRepository(
     private val songDao by lazy { database.songDao() }
     private val albumDao by lazy { database.albumDao() }
     private val artistDao by lazy { database.artistDao() }
+    private val playlistDao by lazy { database.playlistDao() }
 
     data class LocalResyncStats(
         val totalDiscovered: Int,
@@ -212,6 +213,21 @@ class LibraryRepository(
                             }
 
                             onIngestProgress(1f)
+                        }
+
+                        // Import any M3U/M3U8 playlist files found in the music
+                        // folders, now that the song index is up to date.
+                        withContext(Dispatchers.IO) {
+                            try {
+                                M3uPlaylistImporter.importFromFolders(
+                                    context = app,
+                                    folderUris = folders,
+                                    songDao = songDao,
+                                    playlistDao = playlistDao,
+                                )
+                            } catch (_: Exception) {
+                                // Playlist import failures should not fail the resync.
+                            }
                         }
                     } catch (e: Exception) {
                         error = e.message ?: "Failed to scan local music"

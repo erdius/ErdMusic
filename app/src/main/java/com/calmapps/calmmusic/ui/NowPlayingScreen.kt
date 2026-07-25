@@ -9,10 +9,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.LibraryAdd
-import androidx.compose.material.icons.outlined.LibraryAddCheck
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.PlaylistAdd
@@ -69,15 +65,8 @@ fun NowPlayingScreen(
     onBackClick: () -> Unit = {},
     isVideo: Boolean = false,
     player: Player? = null,
-    canDownload: Boolean = false,
-    isDownloadInProgress: Boolean = false,
-    onDownloadClick: () -> Unit = {},
-    onCancelDownloadClick: () -> Unit = {},
-    canAddToLibrary: Boolean = false,
-    onAddToLibraryClick: () -> Unit = {},
     isInLibrary: Boolean = false,
     sourceType: String? = null,
-    streamResolverLabel: String? = null,
 ) {
     Column(
         modifier = Modifier
@@ -277,33 +266,6 @@ fun NowPlayingScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (canAddToLibrary) {
-                IconButton(onClick = onAddToLibraryClick) {
-                    Icon(
-                        imageVector = Icons.Outlined.LibraryAdd,
-                        contentDescription = "Add to library",
-                    )
-                }
-            }
-
-            if (canDownload) {
-                if (isDownloadInProgress) {
-                    IconButton(onClick = onCancelDownloadClick) {
-                        CircularProgressIndicatorMMD(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                } else {
-                    IconButton(onClick = onDownloadClick) {
-                        Icon(
-                            imageVector = Icons.Outlined.Download,
-                            contentDescription = "Download",
-                        )
-                    }
-                }
-            }
-
             IconButton(onClick = onAddToPlaylistClick) {
                 Icon(
                     imageVector = Icons.Outlined.PlaylistAdd,
@@ -358,50 +320,6 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            val isLocal = sourceType == "LOCAL_FILE" || sourceType == "YOUTUBE_DOWNLOAD"
-            if (!isLocal) {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface,
-                            shape = CircleShape
-                        )
-                        .padding(12.dp, 4.dp)
-                ) {
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Outlined.Cloud,
-                            contentDescription = "Streaming source",
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.surface
-                        )
-
-//                        if (!streamResolverLabel.isNullOrBlank()) {
-//                            Spacer(modifier = Modifier.width(6.dp))
-//                            Text(
-//                                text = streamResolverLabel,
-//                                fontSize = 12.sp,
-//                                color = MaterialTheme.colorScheme.surface,
-//                                maxLines = 1,
-//                                overflow = TextOverflow.Ellipsis,
-//                            )
-//                        }
-
-                        if (isInLibrary) {
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Icon(
-                                imageVector = Icons.Outlined.LibraryAddCheck,
-                                contentDescription = "In Library",
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.surface
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }
@@ -432,14 +350,7 @@ private fun NowPlayingScreenPreview() {
         onAddToPlaylistClick = {},
         isVideo = false,
         player = null,
-        canDownload = false,
-        isDownloadInProgress = false,
-        onDownloadClick = {},
-        onCancelDownloadClick = {},
-        canAddToLibrary = false,
-        onAddToLibraryClick = {},
         isInLibrary = true,
-        sourceType = "YOUTUBE",
-        streamResolverLabel = "Innertube/Piped",
+        sourceType = "LOCAL_FILE",
     )
 }

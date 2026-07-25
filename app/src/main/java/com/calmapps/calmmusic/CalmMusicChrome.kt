@@ -361,6 +361,7 @@ private fun CalmMusicTopAppBarActions(
 @Composable
 fun CalmMusicBottomBar(
     currentDestination: NavDestination?,
+    tabs: List<Screen>,
     onNavigate: (String) -> Unit,
 ) {
     val navRoutes = remember { navItems.map { it.route } }
@@ -369,7 +370,7 @@ fun CalmMusicBottomBar(
         NavigationBarMMD(
             modifier = Modifier.padding(bottom = 2.dp),
         ) {
-            navItems.forEach { screen ->
+            tabs.forEach { screen ->
                 val isSelected =
                     currentDestination?.hierarchy?.any { it.route == screen.route } == true
                 NavigationBarItemMMD(

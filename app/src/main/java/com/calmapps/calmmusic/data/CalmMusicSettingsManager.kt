@@ -7,6 +7,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * One entry of the bottom navigation configuration: which tab (by route) and
+ * whether it is currently shown. Order in the list is the display order.
+ */
+data class TabSetting(
+    val route: String,
+    val visible: Boolean,
+)
+
 class CalmMusicSettingsManager(context: Context) {
 
     private val prefs: SharedPreferences =
@@ -18,18 +27,43 @@ class CalmMusicSettingsManager(context: Context) {
     private val _localMusicFolders = MutableStateFlow(getLocalMusicFoldersSync())
     val localMusicFolders: StateFlow<Set<String>> = _localMusicFolders.asStateFlow()
 
-    private val _streamingProvider = MutableStateFlow(getStreamingProviderSync())
-    val streamingProvider: StateFlow<StreamingProvider> = _streamingProvider.asStateFlow()
+    private val _tabSettings = MutableStateFlow(getTabSettingsSync())
+    val tabSettings: StateFlow<List<TabSetting>> = _tabSettings.asStateFlow()
 
-    private val _completeAlbumsWithYouTube = MutableStateFlow(getCompleteAlbumsWithYouTubeSync())
-    val completeAlbumsWithYouTube: StateFlow<Boolean> = _completeAlbumsWithYouTube.asStateFlow()
-
-    fun getLastAppleMusicSyncMillis(): Long {
-        return prefs.getLong(KEY_LAST_APPLE_MUSIC_SYNC_MILLIS, 0L)
+    fun getTabSettingsSync(): List<TabSetting> {
+        val raw = prefs.getString(KEY_TAB_SETTINGS, null)
+        val parsed = raw?.split(',')?.mapNotNull { part ->
+            val pieces = part.split(':')
+            if (pieces.size != 2) return@mapNotNull null
+            val route = pieces[0].trim()
+            if (route.isEmpty()) return@mapNotNull null
+            TabSetting(route = route, visible = pieces[1].trim() == "1")
+        } ?: emptyList()
+        return normalizeTabSettings(parsed)
     }
 
-    fun updateLastAppleMusicSyncMillis(value: Long) {
-        prefs.edit { putLong(KEY_LAST_APPLE_MUSIC_SYNC_MILLIS, value) }
+    fun setTabSettings(settings: List<TabSetting>) {
+        val normalized = normalizeTabSettings(settings)
+        val serialized = normalized.joinToString(",") { setting ->
+            "${setting.route}:${if (setting.visible) 1 else 0}"
+        }
+        prefs.edit { putString(KEY_TAB_SETTINGS, serialized) }
+        _tabSettings.value = normalized
+    }
+
+    /**
+     * Keep stored tab config valid: drop unknown routes, append any tabs the
+     * app has gained since the config was saved, and never allow the More tab
+     * to be hidden (it is the only path to Settings).
+     */
+    private fun normalizeTabSettings(settings: List<TabSetting>): List<TabSetting> {
+        val known = settings.filter { it.route in DEFAULT_TAB_ROUTES }.distinctBy { it.route }
+        val missing = DEFAULT_TAB_ROUTES
+            .filter { route -> known.none { it.route == route } }
+            .map { TabSetting(route = it, visible = true) }
+        return (known + missing).map { setting ->
+            if (setting.route == TAB_ROUTE_MORE) setting.copy(visible = true) else setting
+        }
     }
 
     fun getLastLocalLibraryScanMillis(): Long {
@@ -69,25 +103,6 @@ class CalmMusicSettingsManager(context: Context) {
         return prefs.getStringSet(KEY_LOCAL_MUSIC_FOLDERS, emptySet()) ?: emptySet()
     }
 
-    private fun getStreamingProviderSync(): StreamingProvider {
-        val raw = prefs.getString(KEY_STREAMING_PROVIDER, null)
-        return StreamingProvider.fromStored(raw)
-    }
-
-    fun setStreamingProvider(provider: StreamingProvider) {
-        prefs.edit { putString(KEY_STREAMING_PROVIDER, StreamingProvider.toStored(provider)) }
-        _streamingProvider.value = provider
-    }
-
-    fun getCompleteAlbumsWithYouTubeSync(): Boolean {
-        return prefs.getBoolean(KEY_COMPLETE_ALBUMS_WITH_YOUTUBE, false)
-    }
-
-    fun setCompleteAlbumsWithYouTube(enabled: Boolean) {
-        prefs.edit { putBoolean(KEY_COMPLETE_ALBUMS_WITH_YOUTUBE, enabled) }
-        _completeAlbumsWithYouTube.value = enabled
-    }
-
     // Permissions onboarding
     fun hasCompletedPermissionsOnboarding(): Boolean {
         return prefs.getBoolean(KEY_HAS_COMPLETED_PERMISSIONS_ONBOARDING, false)
@@ -101,10 +116,13 @@ class CalmMusicSettingsManager(context: Context) {
         private const val PREFS_NAME = "calmmusic_settings"
         private const val KEY_INCLUDE_LOCAL_MUSIC = "include_local_music"
         private const val KEY_LOCAL_MUSIC_FOLDERS = "local_music_folders"
-        private const val KEY_LAST_APPLE_MUSIC_SYNC_MILLIS = "last_apple_music_sync_millis"
         private const val KEY_LAST_LOCAL_LIBRARY_SCAN_MILLIS = "last_local_library_scan_millis"
         private const val KEY_HAS_COMPLETED_PERMISSIONS_ONBOARDING = "has_completed_permissions_onboarding"
-        private const val KEY_STREAMING_PROVIDER = "streaming_provider"
-        private const val KEY_COMPLETE_ALBUMS_WITH_YOUTUBE = "complete_albums_with_youtube"
+        private const val KEY_TAB_SETTINGS = "bottom_tab_settings"
+
+        const val TAB_ROUTE_MORE = "more"
+
+        /** Canonical bottom-tab routes in default display order. */
+        val DEFAULT_TAB_ROUTES = listOf("playlists", "artists", "songs", "albums", TAB_ROUTE_MORE)
     }
 }

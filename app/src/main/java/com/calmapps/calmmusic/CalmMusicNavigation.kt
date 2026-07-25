@@ -3,7 +3,6 @@ package com.calmapps.calmmusic
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Album
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PersonOutline
@@ -25,8 +24,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Search : Screen("search", "Search", Icons.Outlined.Search)
 
     object More : Screen("more", "More", Icons.Outlined.MoreHoriz)
-    object Radio : Screen("radio", "Radio", Icons.Outlined.Radio) // Add this line
-    object Downloads : Screen("downloads", "Downloads", Icons.Outlined.Download)
+    object Radio : Screen("radio", "Radio", Icons.Outlined.Radio)
     object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
 }
 

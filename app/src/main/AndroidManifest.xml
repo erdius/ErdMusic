@@ -48,7 +48,7 @@
         <service
             android:name=".CalmMusicAccessibilityService"
             android:exported="true"
-            android:label="CalmMusic Helper"
+            android:label="ErdMusic Helper"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -67,11 +67,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <activity
-            android:name="com.apple.android.sdk.authentication.SDKUriHandlerActivity"
-            android:exported="true"
-            tools:node="merge" />
     </application>
 
     <queries>
