@@ -606,6 +606,9 @@ class CalmMusicViewModel(
                 // set when the station was first tuned in.
                 if (isRadio) {
                     val liveTitle = controller.mediaMetadata.title?.toString()?.trim()
+                    // Temporary diagnostic: always capture the raw value we see,
+                    // regardless of whether it triggers a parse below.
+                    newState = newState.copy(debugIcyRawTitle = liveTitle ?: "(null)")
                     val radioSong = newState.nowPlayingSong
                     if (!liveTitle.isNullOrBlank() && radioSong != null && liveTitle != radioSong.title) {
                         val parts = liveTitle.split(Regex("\\s+[-–]\\s+"), limit = 2)
@@ -1041,4 +1044,6 @@ data class PlaybackState(
     val isBuffering: Boolean = false,
     val nowPlayingPositionMs: Long = 0L,
     val nowPlayingDurationMs: Long = 0L,
+    /** Temporary diagnostic: raw live metadata title seen from the player, for radio streams. */
+    val debugIcyRawTitle: String? = null,
 )

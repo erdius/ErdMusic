@@ -68,6 +68,7 @@ fun NowPlayingScreen(
     isInLibrary: Boolean = false,
     sourceType: String? = null,
     isLive: Boolean = false,
+    debugRawTitle: String? = null,
 ) {
     Column(
         modifier = Modifier
@@ -185,6 +186,16 @@ fun NowPlayingScreen(
                     text = "LIVE",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
+                )
+            }
+            if (debugRawTitle != null) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "debug raw: $debugRawTitle",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         } else {
