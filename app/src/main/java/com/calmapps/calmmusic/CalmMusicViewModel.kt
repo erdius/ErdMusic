@@ -616,9 +616,6 @@ class CalmMusicViewModel(
                     // Player/MediaController.mediaMetadata; PlaybackService
                     // captures it separately from the raw onMetadata callback.
                     val liveTitle = app.playbackStateManager.state.value.icyStreamTitle?.trim()
-                    // Temporary diagnostic: always capture the raw value we see,
-                    // regardless of whether it triggers a parse below.
-                    newState = newState.copy(debugIcyRawTitle = liveTitle ?: "(null)")
                     val radioSong = newState.nowPlayingSong
                     if (!liveTitle.isNullOrBlank() && radioSong != null && liveTitle != lastProcessedIcyTitle) {
                         lastProcessedIcyTitle = liveTitle
@@ -1055,6 +1052,4 @@ data class PlaybackState(
     val isBuffering: Boolean = false,
     val nowPlayingPositionMs: Long = 0L,
     val nowPlayingDurationMs: Long = 0L,
-    /** Temporary diagnostic: raw live metadata title seen from the player, for radio streams. */
-    val debugIcyRawTitle: String? = null,
 )

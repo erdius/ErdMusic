@@ -1323,7 +1323,6 @@ fun CalmMusic(app: CalmMusic) {
                 isInLibrary = isInLibrary,
                 sourceType = song.sourceType,
                 isLive = song.sourceType == "INTERNET_RADIO",
-                debugRawTitle = if (song.sourceType == "INTERNET_RADIO") playbackState.debugIcyRawTitle else null,
             )
         }
 
