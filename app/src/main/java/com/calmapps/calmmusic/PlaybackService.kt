@@ -9,6 +9,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -42,7 +43,16 @@ class PlaybackService : MediaSessionService() {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        val mediaSourceFactory = DefaultMediaSourceFactory(DefaultDataSource.Factory(this))
+        // Signal Icy-Metadata support so Icecast/Shoutcast servers interleave
+        // live "StreamTitle" metadata into the stream; without this header
+        // most servers never send it at all, regardless of client-side
+        // parsing. Media3 decodes it automatically once present.
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(mapOf("Icy-Metadata" to "1"))
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(
+            DefaultDataSource.Factory(this, httpDataSourceFactory)
+        )
 
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(mediaSourceFactory)
