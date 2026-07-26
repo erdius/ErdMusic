@@ -21,9 +21,6 @@ class CalmMusicSettingsManager(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _includeLocalMusic = MutableStateFlow(getIncludeLocalMusicSync())
-    val includeLocalMusic: StateFlow<Boolean> = _includeLocalMusic.asStateFlow()
-
     private val _localMusicFolders = MutableStateFlow(getLocalMusicFoldersSync())
     val localMusicFolders: StateFlow<Set<String>> = _localMusicFolders.asStateFlow()
 
@@ -79,15 +76,6 @@ class CalmMusicSettingsManager(context: Context) {
         prefs.edit { putLong(KEY_LAST_LOCAL_LIBRARY_SCAN_MILLIS, value) }
     }
 
-    fun setIncludeLocalMusic(enabled: Boolean) {
-        prefs.edit { putBoolean(KEY_INCLUDE_LOCAL_MUSIC, enabled) }
-        _includeLocalMusic.value = enabled
-    }
-
-    private fun getIncludeLocalMusicSync(): Boolean {
-        return prefs.getBoolean(KEY_INCLUDE_LOCAL_MUSIC, false)
-    }
-
     fun addLocalMusicFolder(uri: String) {
         val current = getLocalMusicFoldersSync().toMutableSet()
         if (current.add(uri)) {
@@ -119,7 +107,6 @@ class CalmMusicSettingsManager(context: Context) {
 
     companion object {
         private const val PREFS_NAME = "calmmusic_settings"
-        private const val KEY_INCLUDE_LOCAL_MUSIC = "include_local_music"
         private const val KEY_LOCAL_MUSIC_FOLDERS = "local_music_folders"
         private const val KEY_LAST_LOCAL_LIBRARY_SCAN_MILLIS = "last_local_library_scan_millis"
         private const val KEY_HAS_COMPLETED_PERMISSIONS_ONBOARDING = "has_completed_permissions_onboarding"

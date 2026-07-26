@@ -39,7 +39,6 @@ class LibraryRepository(
     )
 
     suspend fun resyncLocalLibrary(
-        includeLocal: Boolean,
         folders: Set<String>,
         onScanProgress: (Float) -> Unit,
         onIngestProgress: (Float) -> Unit,
@@ -48,196 +47,185 @@ class LibraryRepository(
         var stats: LocalResyncStats? = null
 
         try {
-            if (!includeLocal) {
-                onScanProgress(1f)
-                onIngestProgress(0f)
+            if (folders.isNotEmpty()) {
+                try {
+                    val lastScanMillis = app.settingsManager.getLastLocalLibraryScanMillis()
+
+                    val existingAlbumsMap = withContext(Dispatchers.IO) {
+                        albumDao.getAllAlbums()
+                            .filter { it.sourceType == "LOCAL_FILE" }
+                            .associateBy { it.id }
+                    }
+
+                    val (scannedAudio, existingLocalSongs) = withContext(Dispatchers.IO) {
+                        val existingLocalSongs = songDao.getSongsBySourceType("LOCAL_FILE")
+                        val existingByUri = existingLocalSongs.associateBy { it.audioUri }
+                        val scanned = LocalMusicScanner.scanFolders(
+                            context = app,
+                            folderUris = folders,
+                            existingSongsByUri = existingByUri,
+                            lastScanMillis = lastScanMillis,
+                        ) { processed, total ->
+                            val progress = if (total > 0) {
+                                (processed.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                            } else {
+                                1f
+                            }
+                            onScanProgress(progress)
+                        }
+                        scanned to existingLocalSongs
+                    }
+
+                    onIngestProgress(0f)
+
+                    val normalizedLocalEntities = scannedAudio.map { it.song }
+
+                    withContext(Dispatchers.IO) {
+                        val artistEntities = mutableListOf<ArtistEntity>()
+
+                        fun String.normalize() = trim().replace(Regex("\\s+"), " ").lowercase()
+
+                        normalizedLocalEntities.forEach { entity ->
+                            val id = entity.artistId ?: return@forEach
+                            val name = entity.artist.takeIf { it.isNotBlank() } ?: id.removePrefix("LOCAL_FILE:")
+                            artistEntities.add(ArtistEntity(id, name, entity.sourceType))
+                        }
+
+                        scannedAudio.forEach { wrapper ->
+                            val entity = wrapper.song
+                            val explicit = wrapper.albumArtist
+
+                            // If explicit is missing (unchanged file), check our preserved map
+                            val effectiveAlbumArtist = explicit?.takeIf { it.isNotBlank() }
+                                ?: entity.albumId?.let { existingAlbumsMap[it]?.artist }
+
+                            if (!effectiveAlbumArtist.isNullOrBlank()) {
+                                val id = "LOCAL_FILE:" + effectiveAlbumArtist.normalize()
+                                artistEntities.add(ArtistEntity(id, effectiveAlbumArtist, wrapper.song.sourceType))
+                            }
+                        }
+
+                        val uniqueArtists = artistEntities.distinctBy { it.id }
+
+                        onIngestProgress(0.1f)
+
+                        val albumEntities: List<AlbumEntity> = scannedAudio
+                            .mapNotNull { wrapper ->
+                                val entity = wrapper.song
+                                val id = entity.albumId ?: return@mapNotNull null
+                                val name = entity.album ?: return@mapNotNull null
+
+                                val artistName = wrapper.albumArtist?.takeIf { it.isNotBlank() }
+                                    ?: existingAlbumsMap[id]?.artist
+                                    ?: entity.artist
+
+                                val albumArtistId = "LOCAL_FILE:" + artistName.normalize()
+
+                                id to AlbumEntity(
+                                    id = id,
+                                    name = name,
+                                    artist = artistName,
+                                    sourceType = entity.sourceType,
+                                    artistId = albumArtistId,
+                                )
+                            }
+                            .distinctBy { it.first }
+                            .map { it.second }
+
+                        onIngestProgress(0.2f)
+
+                        if (normalizedLocalEntities.isEmpty() && albumEntities.isEmpty() && uniqueArtists.isEmpty()) {
+                            onIngestProgress(1f)
+                            songDao.deleteBySourceType("LOCAL_FILE")
+                            albumDao.deleteBySourceType("LOCAL_FILE")
+                            artistDao.deleteBySourceType("LOCAL_FILE")
+                            return@withContext
+                        }
+
+                        val existingById = existingLocalSongs.associateBy { it.id }
+                        val scannedById = normalizedLocalEntities.associateBy { it.id }
+
+                        val songsToDelete = existingById.keys - scannedById.keys
+                        val songsToUpsert = scannedById.values.filter { newEntity ->
+                            val existing = existingById[newEntity.id]
+                            existing == null || existing != newEntity
+                        }
+
+                        val totalDiscovered = normalizedLocalEntities.size
+                        val indexedNewOrUpdated = songsToUpsert.size
+                        val skippedUnchanged = (totalDiscovered - indexedNewOrUpdated).coerceAtLeast(0)
+                        val deletedMissing = songsToDelete.size
+                        stats = LocalResyncStats(
+                            totalDiscovered = totalDiscovered,
+                            skippedUnchanged = skippedUnchanged,
+                            indexedNewOrUpdated = indexedNewOrUpdated,
+                            deletedMissing = deletedMissing,
+                        )
+
+                        val totalWriteItems = songsToDelete.size + songsToUpsert.size + albumEntities.size + uniqueArtists.size
+                        var writtenItems = 0
+
+                        fun reportWriteProgress() {
+                            if (totalWriteItems <= 0) return
+                            val writeFraction = (writtenItems.toFloat() / totalWriteItems.toFloat()).coerceIn(0f, 1f)
+                            val progress = 0.2f + 0.8f * writeFraction
+                            onIngestProgress(progress.coerceIn(0f, 1f))
+                        }
+
+                        if (songsToDelete.isNotEmpty()) {
+                            songDao.deleteByIds(songsToDelete.toList())
+                            writtenItems += songsToDelete.size
+                            reportWriteProgress()
+                        }
+
+                        if (songsToUpsert.isNotEmpty()) {
+                            val chunkSize = 100.coerceAtMost(songsToUpsert.size)
+                            songsToUpsert.chunked(chunkSize).forEach { chunk ->
+                                songDao.upsertAll(chunk)
+                                writtenItems += chunk.size
+                                reportWriteProgress()
+                            }
+                        }
+
+                        albumDao.deleteBySourceType("LOCAL_FILE")
+                        artistDao.deleteBySourceType("LOCAL_FILE")
+
+                        if (albumEntities.isNotEmpty()) {
+                            albumDao.upsertAll(albumEntities)
+                            writtenItems += albumEntities.size
+                            reportWriteProgress()
+                        }
+                        if (uniqueArtists.isNotEmpty()) {
+                            artistDao.upsertAll(uniqueArtists)
+                            writtenItems += uniqueArtists.size
+                            reportWriteProgress()
+                        }
+
+                        onIngestProgress(1f)
+                    }
+
+                    // Import any M3U/M3U8 playlist files found in the music
+                    // folders, now that the song index is up to date.
+                    withContext(Dispatchers.IO) {
+                        try {
+                            M3uPlaylistImporter.importFromFolders(
+                                context = app,
+                                folderUris = folders,
+                                songDao = songDao,
+                                playlistDao = playlistDao,
+                            )
+                        } catch (_: Exception) {
+                            // Playlist import failures should not fail the resync.
+                        }
+                    }
+                } catch (e: Exception) {
+                    error = e.message ?: "Failed to scan local music"
+                }
+            } else {
                 withContext(Dispatchers.IO) {
                     songDao.deleteBySourceType("LOCAL_FILE")
                     albumDao.deleteBySourceType("LOCAL_FILE")
                     artistDao.deleteBySourceType("LOCAL_FILE")
-                }
-                onIngestProgress(1f)
-            } else {
-                if (folders.isNotEmpty()) {
-                    try {
-                        val lastScanMillis = app.settingsManager.getLastLocalLibraryScanMillis()
-
-                        val existingAlbumsMap = withContext(Dispatchers.IO) {
-                            albumDao.getAllAlbums()
-                                .filter { it.sourceType == "LOCAL_FILE" }
-                                .associateBy { it.id }
-                        }
-
-                        val (scannedAudio, existingLocalSongs) = withContext(Dispatchers.IO) {
-                            val existingLocalSongs = songDao.getSongsBySourceType("LOCAL_FILE")
-                            val existingByUri = existingLocalSongs.associateBy { it.audioUri }
-                            val scanned = LocalMusicScanner.scanFolders(
-                                context = app,
-                                folderUris = folders,
-                                existingSongsByUri = existingByUri,
-                                lastScanMillis = lastScanMillis,
-                            ) { processed, total ->
-                                val progress = if (total > 0) {
-                                    (processed.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-                                } else {
-                                    1f
-                                }
-                                onScanProgress(progress)
-                            }
-                            scanned to existingLocalSongs
-                        }
-
-                        onIngestProgress(0f)
-
-                        val normalizedLocalEntities = scannedAudio.map { it.song }
-
-                        withContext(Dispatchers.IO) {
-                            val artistEntities = mutableListOf<ArtistEntity>()
-
-                            fun String.normalize() = trim().replace(Regex("\\s+"), " ").lowercase()
-
-                            normalizedLocalEntities.forEach { entity ->
-                                val id = entity.artistId ?: return@forEach
-                                val name = entity.artist.takeIf { it.isNotBlank() } ?: id.removePrefix("LOCAL_FILE:")
-                                artistEntities.add(ArtistEntity(id, name, entity.sourceType))
-                            }
-
-                            scannedAudio.forEach { wrapper ->
-                                val entity = wrapper.song
-                                val explicit = wrapper.albumArtist
-
-                                // If explicit is missing (unchanged file), check our preserved map
-                                val effectiveAlbumArtist = explicit?.takeIf { it.isNotBlank() }
-                                    ?: entity.albumId?.let { existingAlbumsMap[it]?.artist }
-
-                                if (!effectiveAlbumArtist.isNullOrBlank()) {
-                                    val id = "LOCAL_FILE:" + effectiveAlbumArtist.normalize()
-                                    artistEntities.add(ArtistEntity(id, effectiveAlbumArtist, wrapper.song.sourceType))
-                                }
-                            }
-
-                            val uniqueArtists = artistEntities.distinctBy { it.id }
-
-                            onIngestProgress(0.1f)
-
-                            val albumEntities: List<AlbumEntity> = scannedAudio
-                                .mapNotNull { wrapper ->
-                                    val entity = wrapper.song
-                                    val id = entity.albumId ?: return@mapNotNull null
-                                    val name = entity.album ?: return@mapNotNull null
-
-                                    val artistName = wrapper.albumArtist?.takeIf { it.isNotBlank() }
-                                        ?: existingAlbumsMap[id]?.artist
-                                        ?: entity.artist
-
-                                    val albumArtistId = "LOCAL_FILE:" + artistName.normalize()
-
-                                    id to AlbumEntity(
-                                        id = id,
-                                        name = name,
-                                        artist = artistName,
-                                        sourceType = entity.sourceType,
-                                        artistId = albumArtistId,
-                                    )
-                                }
-                                .distinctBy { it.first }
-                                .map { it.second }
-
-                            onIngestProgress(0.2f)
-
-                            if (normalizedLocalEntities.isEmpty() && albumEntities.isEmpty() && uniqueArtists.isEmpty()) {
-                                onIngestProgress(1f)
-                                songDao.deleteBySourceType("LOCAL_FILE")
-                                albumDao.deleteBySourceType("LOCAL_FILE")
-                                artistDao.deleteBySourceType("LOCAL_FILE")
-                                return@withContext
-                            }
-
-                            val existingById = existingLocalSongs.associateBy { it.id }
-                            val scannedById = normalizedLocalEntities.associateBy { it.id }
-
-                            val songsToDelete = existingById.keys - scannedById.keys
-                            val songsToUpsert = scannedById.values.filter { newEntity ->
-                                val existing = existingById[newEntity.id]
-                                existing == null || existing != newEntity
-                            }
-
-                            val totalDiscovered = normalizedLocalEntities.size
-                            val indexedNewOrUpdated = songsToUpsert.size
-                            val skippedUnchanged = (totalDiscovered - indexedNewOrUpdated).coerceAtLeast(0)
-                            val deletedMissing = songsToDelete.size
-                            stats = LocalResyncStats(
-                                totalDiscovered = totalDiscovered,
-                                skippedUnchanged = skippedUnchanged,
-                                indexedNewOrUpdated = indexedNewOrUpdated,
-                                deletedMissing = deletedMissing,
-                            )
-
-                            val totalWriteItems = songsToDelete.size + songsToUpsert.size + albumEntities.size + uniqueArtists.size
-                            var writtenItems = 0
-
-                            fun reportWriteProgress() {
-                                if (totalWriteItems <= 0) return
-                                val writeFraction = (writtenItems.toFloat() / totalWriteItems.toFloat()).coerceIn(0f, 1f)
-                                val progress = 0.2f + 0.8f * writeFraction
-                                onIngestProgress(progress.coerceIn(0f, 1f))
-                            }
-
-                            if (songsToDelete.isNotEmpty()) {
-                                songDao.deleteByIds(songsToDelete.toList())
-                                writtenItems += songsToDelete.size
-                                reportWriteProgress()
-                            }
-
-                            if (songsToUpsert.isNotEmpty()) {
-                                val chunkSize = 100.coerceAtMost(songsToUpsert.size)
-                                songsToUpsert.chunked(chunkSize).forEach { chunk ->
-                                    songDao.upsertAll(chunk)
-                                    writtenItems += chunk.size
-                                    reportWriteProgress()
-                                }
-                            }
-
-                            albumDao.deleteBySourceType("LOCAL_FILE")
-                            artistDao.deleteBySourceType("LOCAL_FILE")
-
-                            if (albumEntities.isNotEmpty()) {
-                                albumDao.upsertAll(albumEntities)
-                                writtenItems += albumEntities.size
-                                reportWriteProgress()
-                            }
-                            if (uniqueArtists.isNotEmpty()) {
-                                artistDao.upsertAll(uniqueArtists)
-                                writtenItems += uniqueArtists.size
-                                reportWriteProgress()
-                            }
-
-                            onIngestProgress(1f)
-                        }
-
-                        // Import any M3U/M3U8 playlist files found in the music
-                        // folders, now that the song index is up to date.
-                        withContext(Dispatchers.IO) {
-                            try {
-                                M3uPlaylistImporter.importFromFolders(
-                                    context = app,
-                                    folderUris = folders,
-                                    songDao = songDao,
-                                    playlistDao = playlistDao,
-                                )
-                            } catch (_: Exception) {
-                                // Playlist import failures should not fail the resync.
-                            }
-                        }
-                    } catch (e: Exception) {
-                        error = e.message ?: "Failed to scan local music"
-                    }
-                } else {
-                    withContext(Dispatchers.IO) {
-                        songDao.deleteBySourceType("LOCAL_FILE")
-                        albumDao.deleteBySourceType("LOCAL_FILE")
-                        artistDao.deleteBySourceType("LOCAL_FILE")
-                    }
                 }
             }
 

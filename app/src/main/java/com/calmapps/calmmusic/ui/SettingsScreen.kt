@@ -46,11 +46,9 @@ fun SettingsScreen(
     onSelectedTabChange: (Int) -> Unit,
     tabSettings: List<TabSetting>,
     onTabSettingsChange: (List<TabSetting>) -> Unit,
-    includeLocalMusic: Boolean,
     localFolders: List<String>,
     hasBatteryOptimizationExemption: Boolean,
     onRequestBatteryOptimizationExemption: () -> Unit,
-    onIncludeLocalMusicChange: (Boolean) -> Unit,
     onAddFolderClick: () -> Unit,
     onRemoveFolderClick: (String) -> Unit,
     onRescanLocalMusicClick: () -> Unit,
@@ -241,244 +239,221 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.Top,
             ) {
                 item {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
                     ) {
                         TextMMD(
-                            text = "Include local music",
+                            text = "Local music folders",
                             fontSize = 16.sp,
-                            modifier = Modifier.weight(1f),
+                            fontWeight = FontWeight.SemiBold,
                         )
-                        SwitchMMD(
-                            checked = includeLocalMusic,
-                            onCheckedChange = onIncludeLocalMusicChange,
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        TextMMD(
+                            text = "Choose one or more folders to scan for audio files.",
+                            fontSize = 14.sp,
+                        )
+
+                        HorizontalDividerMMD(
+                            thickness = 1.dp,
+                            modifier = Modifier.padding(vertical = 8.dp)
                         )
                     }
                 }
 
-                if (includeLocalMusic) {
-                    item {
-                        Spacer(modifier = Modifier.height(8.dp))
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        ButtonMMD(
+                            onClick = onAddFolderClick,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            TextMMD(
+                                text = "Add folder",
+                                fontSize = 16.sp,
+                            )
+                        }
 
+                        if (localFolders.isNotEmpty()) {
+                            OutlinedButtonMMD(
+                                onClick = onRescanLocalMusicClick,
+                                modifier = Modifier.weight(1f),
+                                enabled = localFolders.isNotEmpty() && !isRescanningLocal,
+                            ) {
+                                TextMMD(
+                                    text = "Rescan",
+                                    fontSize = 16.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (isRescanningLocal && !isIngestingLocal) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 4.dp, end = 4.dp, top = 4.dp),
+                            ) {
+                                SliderMMD(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    value = localScanProgress.coerceIn(0f, 1f),
+                                    onValueChange = { },
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                            ) {
+                                val percent =
+                                    (localScanProgress * 100f).toInt().coerceIn(0, 100)
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    TextMMD(
+                                        text = "Step 1 of 2 – Scanning folders for audio files… $percent%",
+                                        fontSize = 14.sp,
+                                    )
+                                    if (localScanTotalDiscovered != null && localScanSkippedUnchanged != null && localScanIndexedNewOrUpdated != null) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        TextMMD(
+                                            text = "Found $localScanTotalDiscovered files · Skipped $localScanSkippedUnchanged unchanged · Indexed $localScanIndexedNewOrUpdated new/updated",
+                                            fontSize = 13.sp,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (isIngestingLocal) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 4.dp, end = 4.dp, top = 4.dp),
+                            ) {
+                                SliderMMD(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    value = localIngestProgress.coerceIn(0f, 1f),
+                                    onValueChange = { },
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                            ) {
+                                val ingestPercent =
+                                    (localIngestProgress * 100f).toInt().coerceIn(0, 100)
+                                Column(modifier = Modifier.fillMaxWidth()) {
+                                    TextMMD(
+                                        text = "Step 2 of 2 – Adding music to library… $ingestPercent%",
+                                        fontSize = 14.sp,
+                                    )
+                                    if (localScanDeletedMissing != null && localScanDeletedMissing > 0) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        TextMMD(
+                                            text = "Removed ${localScanDeletedMissing} files that are no longer present",
+                                            fontSize = 13.sp,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Show the last scan summary after work is complete.
+                if (!isRescanningLocal && !isIngestingLocal &&
+                    localScanTotalDiscovered != null &&
+                    localScanSkippedUnchanged != null &&
+                    localScanIndexedNewOrUpdated != null
+                ) {
+                    item {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                         ) {
                             TextMMD(
-                                text = "Local music folders",
-                                fontSize = 16.sp,
+                                text = "Last scan",
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                             )
 
                             Spacer(modifier = Modifier.height(4.dp))
 
                             TextMMD(
-                                text = "Choose one or more folders to scan for audio files.",
-                                fontSize = 14.sp,
+                                text = "Found $localScanTotalDiscovered files · Skipped $localScanSkippedUnchanged unchanged · Indexed $localScanIndexedNewOrUpdated new/updated",
+                                fontSize = 13.sp,
                             )
 
-                            HorizontalDividerMMD(
-                                thickness = 1.dp,
-                                modifier = Modifier.padding(vertical = 8.dp)
+                            if (localScanDeletedMissing != null && localScanDeletedMissing > 0) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                TextMMD(
+                                    text = "Removed ${localScanDeletedMissing} files that are no longer present",
+                                    fontSize = 13.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (localFolders.isEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
+                        ) {
+                            TextMMD(
+                                text = "No folders selected yet.",
+                                fontSize = 14.sp,
                             )
                         }
                     }
-
-                    item {
+                } else {
+                    items(localFolders) { folder ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, top = 4.dp),
+                                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            ButtonMMD(
-                                onClick = onAddFolderClick,
+                            TextMMD(
+                                text = formatDirectoryPath(folder),
+                                fontSize = 14.sp,
                                 modifier = Modifier.weight(1f),
-                            ) {
-                                TextMMD(
-                                    text = "Add folder",
-                                    fontSize = 16.sp,
+                            )
+                            IconButton(onClick = { onRemoveFolderClick(folder) }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Delete,
+                                    contentDescription = "Remove folder",
                                 )
-                            }
-
-                            if (localFolders.isNotEmpty()) {
-                                OutlinedButtonMMD(
-                                    onClick = onRescanLocalMusicClick,
-                                    modifier = Modifier.weight(1f),
-                                    enabled = localFolders.isNotEmpty() && !isRescanningLocal,
-                                ) {
-                                    TextMMD(
-                                        text = "Rescan",
-                                        fontSize = 16.sp,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (isRescanningLocal && !isIngestingLocal) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = 4.dp, end = 4.dp, top = 4.dp),
-                                ) {
-                                    SliderMMD(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        value = localScanProgress.coerceIn(0f, 1f),
-                                        onValueChange = { },
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                ) {
-                                    val percent =
-                                        (localScanProgress * 100f).toInt().coerceIn(0, 100)
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        TextMMD(
-                                            text = "Step 1 of 2 – Scanning folders for audio files… $percent%",
-                                            fontSize = 14.sp,
-                                        )
-                                        if (localScanTotalDiscovered != null && localScanSkippedUnchanged != null && localScanIndexedNewOrUpdated != null) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            TextMMD(
-                                                text = "Found $localScanTotalDiscovered files · Skipped $localScanSkippedUnchanged unchanged · Indexed $localScanIndexedNewOrUpdated new/updated",
-                                                fontSize = 13.sp,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (isIngestingLocal) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = 4.dp, end = 4.dp, top = 4.dp),
-                                ) {
-                                    SliderMMD(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        value = localIngestProgress.coerceIn(0f, 1f),
-                                        onValueChange = { },
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                ) {
-                                    val ingestPercent =
-                                        (localIngestProgress * 100f).toInt().coerceIn(0, 100)
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        TextMMD(
-                                            text = "Step 2 of 2 – Adding music to library… $ingestPercent%",
-                                            fontSize = 14.sp,
-                                        )
-                                        if (localScanDeletedMissing != null && localScanDeletedMissing > 0) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            TextMMD(
-                                                text = "Removed ${localScanDeletedMissing} files that are no longer present",
-                                                fontSize = 13.sp,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Show the last scan summary after work is complete.
-                    if (!isRescanningLocal && !isIngestingLocal &&
-                        localScanTotalDiscovered != null &&
-                        localScanSkippedUnchanged != null &&
-                        localScanIndexedNewOrUpdated != null
-                    ) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-                            ) {
-                                TextMMD(
-                                    text = "Last scan",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-
-                                Spacer(modifier = Modifier.height(4.dp))
-
-                                TextMMD(
-                                    text = "Found $localScanTotalDiscovered files · Skipped $localScanSkippedUnchanged unchanged · Indexed $localScanIndexedNewOrUpdated new/updated",
-                                    fontSize = 13.sp,
-                                )
-
-                                if (localScanDeletedMissing != null && localScanDeletedMissing > 0) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    TextMMD(
-                                        text = "Removed ${localScanDeletedMissing} files that are no longer present",
-                                        fontSize = 13.sp,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (localFolders.isEmpty()) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp),
-                            ) {
-                                TextMMD(
-                                    text = "No folders selected yet.",
-                                    fontSize = 14.sp,
-                                )
-                            }
-                        }
-                    } else {
-                        items(localFolders) { folder ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TextMMD(
-                                    text = formatDirectoryPath(folder),
-                                    fontSize = 14.sp,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                IconButton(onClick = { onRemoveFolderClick(folder) }) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Delete,
-                                        contentDescription = "Remove folder",
-                                    )
-                                }
                             }
                         }
                     }

@@ -172,9 +172,7 @@ fun CalmMusic(app: CalmMusic) {
 
     var localMediaController by remember { mutableStateOf<MediaController?>(null) }
 
-    val includeLocalMusicState = settingsManager.includeLocalMusic.collectAsState()
     val localMusicFoldersState = settingsManager.localMusicFolders.collectAsState()
-    val includeLocalMusic = includeLocalMusicState.value
     val localMusicFolders = localMusicFoldersState.value
     val tabSettings by settingsManager.tabSettings.collectAsState()
     val visibleNavItems = remember(tabSettings) {
@@ -323,7 +321,6 @@ fun CalmMusic(app: CalmMusic) {
     }
 
     suspend fun resyncLocalLibrary(
-        includeLocal: Boolean,
         folders: Set<String>,
     ) {
         if (isRescanningLocal) return
@@ -338,7 +335,6 @@ fun CalmMusic(app: CalmMusic) {
         songsError = null
         try {
             val result = viewModel.resyncLocalLibrary(
-                includeLocal = includeLocal,
                 folders = folders,
                 onScanProgress = { progress ->
                     localScanProgress = progress.coerceIn(0f, 1f)
@@ -610,9 +606,9 @@ fun CalmMusic(app: CalmMusic) {
         return
     }
 
-    LaunchedEffect(includeLocalMusic, localMusicFolders) {
+    LaunchedEffect(localMusicFolders) {
         delay(500L)
-        resyncLocalLibrary(includeLocalMusic, localMusicFolders)
+        resyncLocalLibrary(localMusicFolders)
     }
 
     val openLocalSettings: () -> Unit = {
@@ -1180,13 +1176,9 @@ fun CalmMusic(app: CalmMusic) {
                         onSelectedTabChange = { settingsSelectedTab = it },
                         tabSettings = tabSettings,
                         onTabSettingsChange = { settingsManager.setTabSettings(it) },
-                        includeLocalMusic = includeLocalMusic,
                         localFolders = localMusicFolders.toList(),
                         hasBatteryOptimizationExemption = hasBatteryOptimizationExemption,
                         onRequestBatteryOptimizationExemption = { requestBatteryOptimizationExemption() },
-                        onIncludeLocalMusicChange = { enabled ->
-                            settingsManager.setIncludeLocalMusic(enabled)
-                        },
                         onAddFolderClick = {
                             folderPickerLauncher.launch(null)
                         },
@@ -1195,7 +1187,7 @@ fun CalmMusic(app: CalmMusic) {
                         },
                         onRescanLocalMusicClick = {
                             libraryScope.launch {
-                                resyncLocalLibrary(includeLocalMusic, localMusicFolders)
+                                resyncLocalLibrary(localMusicFolders)
                             }
                         },
                         isRescanningLocal = isRescanningLocal,
