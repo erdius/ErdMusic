@@ -41,7 +41,7 @@ class PlaybackCoordinator {
 
         queue.forEachIndexed { globalIndex, song ->
             when (song.sourceType) {
-                "LOCAL_FILE", "YOUTUBE_DOWNLOAD" -> {
+                "LOCAL_FILE", "YOUTUBE_DOWNLOAD", "INTERNET_RADIO" -> {
                     val uri = song.audioUri
                     if (!uri.isNullOrBlank()) {
                         localMap[globalIndex] = localCounter

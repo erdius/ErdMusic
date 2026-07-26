@@ -123,6 +123,6 @@ class CalmMusicSettingsManager(context: Context) {
         const val TAB_ROUTE_MORE = "more"
 
         /** Canonical bottom-tab routes in default display order. */
-        val DEFAULT_TAB_ROUTES = listOf("playlists", "artists", "songs", "albums", TAB_ROUTE_MORE)
+        val DEFAULT_TAB_ROUTES = listOf("playlists", "artists", "songs", "albums", "streams", TAB_ROUTE_MORE)
     }
 }

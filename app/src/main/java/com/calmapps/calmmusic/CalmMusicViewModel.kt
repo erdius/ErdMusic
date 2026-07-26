@@ -238,7 +238,7 @@ class CalmMusicViewModel(
             val index = state.playbackQueueIndex
 
             val needsInit = when (song.sourceType) {
-                "LOCAL_FILE", "YOUTUBE_DOWNLOAD" -> !playbackCoordinator.localQueueInitialized
+                "LOCAL_FILE", "YOUTUBE_DOWNLOAD", "INTERNET_RADIO" -> !playbackCoordinator.localQueueInitialized
                 else -> false
             }
 
@@ -317,7 +317,7 @@ class CalmMusicViewModel(
         _playbackState.value = newState
         persistPlaybackSnapshot(newState)
 
-        if (song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE_DOWNLOAD") {
+        if (song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE_DOWNLOAD" || song.sourceType == "INTERNET_RADIO") {
             val controller = localController
             if (controller != null && playbackCoordinator.localMediaItemsForQueue.isNotEmpty()) {
 
@@ -326,7 +326,8 @@ class CalmMusicViewModel(
                 var segmentEndIndex = startIndex
                 while (segmentEndIndex < queue.size &&
                     (queue[segmentEndIndex].sourceType == "LOCAL_FILE" ||
-                            queue[segmentEndIndex].sourceType == "YOUTUBE_DOWNLOAD")
+                            queue[segmentEndIndex].sourceType == "YOUTUBE_DOWNLOAD" ||
+                            queue[segmentEndIndex].sourceType == "INTERNET_RADIO")
                 ) {
                     segmentEndIndex++
                 }
@@ -557,9 +558,10 @@ class CalmMusicViewModel(
                 val queue = state.playbackQueue
                 val currentSong = state.nowPlayingSong
                 val isLocalFile = currentSong?.sourceType == "LOCAL_FILE" || currentSong?.sourceType == "YOUTUBE_DOWNLOAD"
+                val isRadio = currentSong?.sourceType == "INTERNET_RADIO"
                 var didAutoAdvance = false
 
-                if (!isLocalFile) {
+                if (!isLocalFile && !isRadio) {
                     delay(slowIntervalMs)
                     continue
                 }
@@ -569,12 +571,14 @@ class CalmMusicViewModel(
                 val position = controller.currentPosition
                 val duration = controller.duration
                 val playbackState = controller.playbackState
+                // Local files buffer instantly; radio streams genuinely wait on the network.
+                val isBufferingNow = isRadio && playbackState == Player.STATE_BUFFERING
 
                 var newState = state.copy(
                     isPlaybackPlaying = isPlaying,
                     nowPlayingPositionMs = position,
                     nowPlayingDurationMs = if (duration > 0) duration else state.nowPlayingDurationMs,
-                    isBuffering = false,
+                    isBuffering = isBufferingNow,
                 )
 
                 val currentMediaId = controller.currentMediaItem?.mediaId
@@ -641,7 +645,7 @@ class CalmMusicViewModel(
                 }
 
                 val nextDelayMs = when {
-                    isLocalFile && isPlaying -> fastIntervalMs
+                    (isLocalFile || isRadio) && isPlaying -> fastIntervalMs
                     else -> slowIntervalMs
                 }
                 delay(nextDelayMs)

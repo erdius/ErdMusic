@@ -14,8 +14,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ArtistEntity::class,
         PlaylistEntity::class,
         PlaylistTrackEntity::class,
+        RadioStationEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false,
 )
 abstract class CalmMusicDatabase : RoomDatabase() {
@@ -24,6 +25,7 @@ abstract class CalmMusicDatabase : RoomDatabase() {
     abstract fun albumDao(): AlbumDao
     abstract fun artistDao(): ArtistDao
     abstract fun playlistDao(): PlaylistDao
+    abstract fun radioStationDao(): RadioStationDao
 
     companion object {
         @Volatile
@@ -48,6 +50,16 @@ abstract class CalmMusicDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `radio_stations` (" +
+                        "`id` TEXT NOT NULL, `name` TEXT NOT NULL, `url` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): CalmMusicDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -55,7 +67,7 @@ abstract class CalmMusicDatabase : RoomDatabase() {
                     CalmMusicDatabase::class.java,
                     "calmmusic.db",
                 )
-                    .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                    .addMigrations(MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

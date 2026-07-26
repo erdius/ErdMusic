@@ -93,10 +93,13 @@ import com.calmapps.calmmusic.ui.PlaylistItem
 import com.calmapps.calmmusic.ui.PlaylistUiModel
 import com.calmapps.calmmusic.ui.PlaylistsScreen
 import com.calmapps.calmmusic.ui.RadioScreen
+import com.calmapps.calmmusic.ui.RadioStationUiModel
 import com.calmapps.calmmusic.ui.SearchScreen
 import com.calmapps.calmmusic.ui.SettingsScreen
 import com.calmapps.calmmusic.ui.SongUiModel
 import com.calmapps.calmmusic.ui.SongsScreen
+import com.calmapps.calmmusic.ui.StreamEditScreen
+import com.calmapps.calmmusic.ui.StreamsScreen
 import com.mudita.mmd.ThemeMMD
 import com.mudita.mmd.components.bottom_sheet.ModalBottomSheetMMD
 import com.mudita.mmd.components.bottom_sheet.SheetStateMMD
@@ -242,6 +245,9 @@ fun CalmMusic(app: CalmMusic) {
     }
 
     val playlistsViewModel: PlaylistsViewModel = viewModel(factory = PlaylistsViewModel.factory(app))
+    val radioStationsViewModel: RadioStationsViewModel = viewModel(factory = RadioStationsViewModel.factory(app))
+    val radioStations by radioStationsViewModel.stations.collectAsState()
+    var editingStation by remember { mutableStateOf<RadioStationUiModel?>(null) }
 
     val addToPlaylistSheetState: SheetStateMMD = rememberModalBottomSheetMMDState(
         skipPartiallyExpanded = true,
@@ -394,7 +400,7 @@ fun CalmMusic(app: CalmMusic) {
         val song = queue[startIndex]
         val controller = localMediaController
 
-        val needsLocalController = song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE_DOWNLOAD"
+        val needsLocalController = song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE_DOWNLOAD" || song.sourceType == "INTERNET_RADIO"
         if (needsLocalController && controller == null) {
             libraryScope.launch {
                 snackbarHostState.showSnackbar(
@@ -1017,6 +1023,64 @@ fun CalmMusic(app: CalmMusic) {
                         onDeleteClick = onDelete,
                     )
                 }
+                composable(Screen.Streams.route) {
+                    StreamsScreen(
+                        stations = radioStations,
+                        currentStationId = nowPlayingSong
+                            ?.takeIf { it.sourceType == "INTERNET_RADIO" }?.id,
+                        isPlaying = isPlaybackPlaying,
+                        onStationClick = { station ->
+                            val song = SongUiModel(
+                                id = station.id,
+                                title = station.name,
+                                artist = "Internet Radio",
+                                sourceType = "INTERNET_RADIO",
+                                audioUri = station.url,
+                            )
+                            startPlaybackFromQueue(listOf(song), 0, isNewQueue = true)
+                        },
+                        onAddStationClick = {
+                            editingStation = null
+                            navController.navigate(Screen.StreamEdit.route) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onEditStationClick = { station ->
+                            editingStation = station
+                            navController.navigate(Screen.StreamEdit.route) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onDeleteStationClick = { station ->
+                            libraryScope.launch {
+                                radioStationsViewModel.deleteStations(setOf(station.id))
+                            }
+                        },
+                    )
+                }
+                composable(Screen.StreamEdit.route) {
+                    val editing = editingStation
+                    StreamEditScreen(
+                        initialName = editing?.name ?: "",
+                        initialUrl = editing?.url ?: "",
+                        isEditing = editing != null,
+                        onConfirm = { name, url ->
+                            libraryScope.launch {
+                                if (editing != null) {
+                                    radioStationsViewModel.updateStation(editing.id, name, url)
+                                } else {
+                                    radioStationsViewModel.addStation(name, url)
+                                }
+                                editingStation = null
+                                navController.popBackStack()
+                            }
+                        },
+                        onCancel = {
+                            editingStation = null
+                            navController.popBackStack()
+                        },
+                    )
+                }
                 composable(Screen.AlbumDetails.route) {
                     AlbumDetailsScreen(
                         album = selectedAlbum,
@@ -1245,6 +1309,7 @@ fun CalmMusic(app: CalmMusic) {
                 player = if (isLocalVideo) localMediaController else null,
                 isInLibrary = isInLibrary,
                 sourceType = song.sourceType,
+                isLive = song.sourceType == "INTERNET_RADIO",
             )
         }
 
@@ -1690,6 +1755,8 @@ fun getAppBarTitle(currentDestination: NavDestination?): String {
         currentDestination?.route == Screen.Artists.route -> "Artists"
         currentDestination?.route == Screen.ArtistDetails.route -> "Artist"
         currentDestination?.route == Screen.Search.route -> "Search"
+        currentDestination?.route == Screen.Streams.route -> "Streams"
+        currentDestination?.route == Screen.StreamEdit.route -> "Stream"
         currentDestination?.route == Screen.More.route -> "More"
         currentDestination?.route == Screen.Radio.route -> "Radio"
         currentDestination?.route == Screen.Settings.route -> "Settings"

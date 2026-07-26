@@ -6,6 +6,7 @@ import androidx.compose.material.icons.outlined.Album
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Podcasts
 import androidx.compose.material.icons.outlined.Radio // Add this import
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -23,6 +24,9 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object ArtistDetails : Screen("artistDetails", "Artist", Icons.Outlined.LibraryMusic)
     object Search : Screen("search", "Search", Icons.Outlined.Search)
 
+    object Streams : Screen("streams", "Streams", Icons.Outlined.Podcasts)
+    object StreamEdit : Screen("streamEdit", "Stream", Icons.Outlined.Podcasts)
+
     object More : Screen("more", "More", Icons.Outlined.MoreHoriz)
     object Radio : Screen("radio", "Radio", Icons.Outlined.Radio)
     object Settings : Screen("settings", "Settings", Icons.Outlined.Settings)
@@ -33,5 +37,6 @@ val navItems = listOf(
     Screen.Artists,
     Screen.Songs,
     Screen.Albums,
+    Screen.Streams,
     Screen.More,
 )

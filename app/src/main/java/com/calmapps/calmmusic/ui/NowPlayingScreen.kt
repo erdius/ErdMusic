@@ -67,6 +67,7 @@ fun NowPlayingScreen(
     player: Player? = null,
     isInLibrary: Boolean = false,
     sourceType: String? = null,
+    isLive: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -165,38 +166,61 @@ fun NowPlayingScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            SliderMMD(
-                modifier = Modifier.fillMaxWidth(),
-                value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
-                onValueChange = { value ->
-                    if (duration > 0) {
-                        val newPosition = (value * duration).toLong().coerceIn(0L, duration)
-                        onSeek(newPosition)
-                    }
-                },
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
+        if (isLive) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = formatDurationMillisNonNull(currentPosition),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.error,
+                            shape = CircleShape,
+                        ),
                 )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = formatDurationMillisNonNull(duration),
+                    text = "LIVE",
                     fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                 )
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                SliderMMD(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                    onValueChange = { value ->
+                        if (duration > 0) {
+                            val newPosition = (value * duration).toLong().coerceIn(0L, duration)
+                            onSeek(newPosition)
+                        }
+                    },
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = formatDurationMillisNonNull(currentPosition),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = formatDurationMillisNonNull(duration),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
 
@@ -206,23 +230,25 @@ fun NowPlayingScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 32.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = if (isLive) Arrangement.Center else Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ButtonMMD(
-                onClick = onSeekBackwardClick,
-                modifier = Modifier.size(72.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary
-                )
+            if (!isLive) {
+                ButtonMMD(
+                    onClick = onSeekBackwardClick,
+                    modifier = Modifier.size(72.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
 
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.SkipPrevious,
-                    modifier = Modifier.size(46.dp),
-                    contentDescription = "Previous Song",
-                    tint = MaterialTheme.colorScheme.onSecondary
-                )
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.SkipPrevious,
+                        modifier = Modifier.size(46.dp),
+                        contentDescription = "Previous Song",
+                        tint = MaterialTheme.colorScheme.onSecondary
+                    )
+                }
             }
 
             if (isLoading) {
@@ -243,83 +269,88 @@ fun NowPlayingScreen(
                 }
             }
 
-            ButtonMMD(
-                onClick = onSeekForwardClick,
-                modifier = Modifier.size(72.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.SkipNext,
-                    modifier = Modifier.size(46.dp),
-                    contentDescription = "Next Song",
-                    tint = MaterialTheme.colorScheme.onSecondary
-                )
+            if (!isLive) {
+                ButtonMMD(
+                    onClick = onSeekForwardClick,
+                    modifier = Modifier.size(72.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.SkipNext,
+                        modifier = Modifier.size(46.dp),
+                        contentDescription = "Next Song",
+                        tint = MaterialTheme.colorScheme.onSecondary
+                    )
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         // Bottom row for secondary actions (e.g. shuffle, repeat, add to playlist / library)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onAddToPlaylistClick) {
-                Icon(
-                    imageVector = Icons.Outlined.PlaylistAdd,
-                    contentDescription = "Add to playlist",
-                )
-            }
-
-            IconButton(onClick = onShuffleClick) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Not shown for live radio: there is no queue to shuffle/repeat and
+        // stations aren't addable to song playlists.
+        if (!isLive) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onAddToPlaylistClick) {
                     Icon(
-                        imageVector = Icons.Outlined.Shuffle,
-                        contentDescription = "Shuffle queue",
+                        imageVector = Icons.Outlined.PlaylistAdd,
+                        contentDescription = "Add to playlist",
                     )
-                    if (isShuffleOn) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(4.dp)
-                                .background(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    shape = CircleShape,
-                                ),
+                }
+
+                IconButton(onClick = onShuffleClick) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Outlined.Shuffle,
+                            contentDescription = "Shuffle queue",
                         )
+                        if (isShuffleOn) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(4.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape,
+                                    ),
+                            )
+                        }
                     }
                 }
-            }
 
-            IconButton(onClick = onRepeatClick) {
-                val (icon, description, isActive) = when (repeatMode) {
-                    RepeatMode.OFF -> Triple(Icons.Outlined.Repeat, "Repeat off", false)
-                    RepeatMode.QUEUE -> Triple(Icons.Outlined.Repeat, "Repeat queue", true)
-                    RepeatMode.ONE -> Triple(Icons.Outlined.RepeatOne, "Repeat current song", true)
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = description,
-                    )
-                    if (isActive) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(4.dp)
-                                .background(
-                                    color = MaterialTheme.colorScheme.primary,
-                                    shape = CircleShape,
-                                ),
+                IconButton(onClick = onRepeatClick) {
+                    val (icon, description, isActive) = when (repeatMode) {
+                        RepeatMode.OFF -> Triple(Icons.Outlined.Repeat, "Repeat off", false)
+                        RepeatMode.QUEUE -> Triple(Icons.Outlined.Repeat, "Repeat queue", true)
+                        RepeatMode.ONE -> Triple(Icons.Outlined.RepeatOne, "Repeat current song", true)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = description,
                         )
+                        if (isActive) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(4.dp)
+                                    .background(
+                                        color = MaterialTheme.colorScheme.primary,
+                                        shape = CircleShape,
+                                    ),
+                            )
+                        }
                     }
                 }
+
+                Spacer(modifier = Modifier.weight(1f))
             }
-
-            Spacer(modifier = Modifier.weight(1f))
-
         }
     }
 }
