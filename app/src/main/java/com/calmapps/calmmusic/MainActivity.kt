@@ -1,6 +1,5 @@
 package com.calmapps.calmmusic
 
-import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.os.Bundle
@@ -93,13 +92,12 @@ import com.calmapps.calmmusic.ui.PlaylistItem
 import com.calmapps.calmmusic.ui.PlaylistUiModel
 import com.calmapps.calmmusic.ui.PlaylistsScreen
 import com.calmapps.calmmusic.ui.RadioScreen
+import com.calmapps.calmmusic.ui.RadioStationEditScreen
 import com.calmapps.calmmusic.ui.RadioStationUiModel
 import com.calmapps.calmmusic.ui.SearchScreen
 import com.calmapps.calmmusic.ui.SettingsScreen
 import com.calmapps.calmmusic.ui.SongUiModel
 import com.calmapps.calmmusic.ui.SongsScreen
-import com.calmapps.calmmusic.ui.StreamEditScreen
-import com.calmapps.calmmusic.ui.StreamsScreen
 import com.mudita.mmd.ThemeMMD
 import com.mudita.mmd.components.bottom_sheet.ModalBottomSheetMMD
 import com.mudita.mmd.components.bottom_sheet.SheetStateMMD
@@ -161,7 +159,6 @@ fun CalmMusic(app: CalmMusic) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val activity = context as? Activity
     val appContext = context.applicationContext
     val playlistScope = rememberCoroutineScope()
     val libraryScope = rememberCoroutineScope()
@@ -174,9 +171,6 @@ fun CalmMusic(app: CalmMusic) {
     val playbackState by viewModel.playbackState.collectAsState()
 
     var localMediaController by remember { mutableStateOf<MediaController?>(null) }
-
-    val externalMediaState by ExternalMediaRepository.mediaState.collectAsState()
-    val showExternalControls = externalMediaState.hasActiveSession && playbackState.nowPlayingSong == null
 
     val includeLocalMusicState = settingsManager.includeLocalMusic.collectAsState()
     val localMusicFoldersState = settingsManager.localMusicFolders.collectAsState()
@@ -214,15 +208,6 @@ fun CalmMusic(app: CalmMusic) {
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasOverlayPermission = Settings.canDrawOverlays(context)
                 updateBatteryOptimizationState()
-
-                val intent = activity?.intent
-                val fromRadio = intent?.getBooleanExtra("FROM_RADIO_TUNER", false) ?: false
-                if (fromRadio) {
-                    if (viewModel.playbackState.value.isPlaybackPlaying) {
-                        viewModel.togglePlayback(localMediaController)
-                    }
-                    intent?.removeExtra("FROM_RADIO_TUNER")
-                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -1023,8 +1008,8 @@ fun CalmMusic(app: CalmMusic) {
                         onDeleteClick = onDelete,
                     )
                 }
-                composable(Screen.Streams.route) {
-                    StreamsScreen(
+                composable(Screen.Radio.route) {
+                    RadioScreen(
                         stations = radioStations,
                         currentStationId = nowPlayingSong
                             ?.takeIf { it.sourceType == "INTERNET_RADIO" }?.id,
@@ -1048,13 +1033,13 @@ fun CalmMusic(app: CalmMusic) {
                         },
                         onAddStationClick = {
                             editingStation = null
-                            navController.navigate(Screen.StreamEdit.route) {
+                            navController.navigate(Screen.RadioStationEdit.route) {
                                 launchSingleTop = true
                             }
                         },
                         onEditStationClick = { station ->
                             editingStation = station
-                            navController.navigate(Screen.StreamEdit.route) {
+                            navController.navigate(Screen.RadioStationEdit.route) {
                                 launchSingleTop = true
                             }
                         },
@@ -1065,9 +1050,9 @@ fun CalmMusic(app: CalmMusic) {
                         },
                     )
                 }
-                composable(Screen.StreamEdit.route) {
+                composable(Screen.RadioStationEdit.route) {
                     val editing = editingStation
-                    StreamEditScreen(
+                    RadioStationEditScreen(
                         initialName = editing?.name ?: "",
                         initialUrl = editing?.url ?: "",
                         isEditing = editing != null,
@@ -1128,25 +1113,12 @@ fun CalmMusic(app: CalmMusic) {
 
                 composable(Screen.More.route) {
                     MoreScreen(
-                        onNavigateToRadio = {
-                            navController.navigate(Screen.Radio.route) {
-                                launchSingleTop = true
-                            }
-                        },
                         onNavigateToSettings = {
                             settingsSelectedTab = 0
                             navController.navigate(Screen.Settings.route) {
                                 launchSingleTop = true
                             }
                         },
-                    )
-                }
-
-                composable(Screen.Radio.route) {
-                    RadioScreen(
-                        onNavigateBack = { navController.popBackStack() },
-                        onPausePlayback = { viewModel.togglePlayback(localMediaController) },
-                        isAppPlaying = playbackState.isPlaybackPlaying
                     )
                 }
 
@@ -1236,17 +1208,6 @@ fun CalmMusic(app: CalmMusic) {
                         localScanDeletedMissing = localScanDeletedMissing,
                     )
                 }
-            }
-        }
-
-        if (showExternalControls) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 80.dp)
-                    .padding(horizontal = 16.dp)
-            ) {
-                ExternalMediaWidget(externalMediaState)
             }
         }
 
@@ -1685,80 +1646,6 @@ fun CalmMusic(app: CalmMusic) {
 }
 
 @Composable
-fun ExternalMediaWidget(state: ExternalMediaState) {
-    val context = LocalContext.current
-    if (!isNotificationServiceEnabled(context)) {
-        Box(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-            ButtonMMD(
-                onClick = {
-                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(intent)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(8.dp)
-            ) {
-                TextMMD("Tap to Enable Music Control", fontSize = 14.sp)
-            }
-        }
-    } else {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "Playing on ${state.packageName}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = state.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = state.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { ExternalMediaRepository.skipToPrevious() }) {
-                        Icon(Icons.Default.SkipPrevious, "Prev")
-                    }
-
-                    androidx.compose.material3.FilledIconButton(onClick = { ExternalMediaRepository.togglePlayPause() }) {
-                        Icon(if(state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, "Play")
-                    }
-
-                    IconButton(onClick = { ExternalMediaRepository.skipToNext() }) {
-                        Icon(Icons.Default.SkipNext, "Next")
-                    }
-                }
-            }
-        }
-    }
-}
-
-fun isNotificationServiceEnabled(context: android.content.Context): Boolean {
-    val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-    return flat != null && flat.contains(context.packageName)
-}
-
-@Composable
 fun getAppBarTitle(currentDestination: NavDestination?): String {
     return when {
         currentDestination?.route == Screen.Playlists.route -> "Playlists"
@@ -1768,10 +1655,9 @@ fun getAppBarTitle(currentDestination: NavDestination?): String {
         currentDestination?.route == Screen.Artists.route -> "Artists"
         currentDestination?.route == Screen.ArtistDetails.route -> "Artist"
         currentDestination?.route == Screen.Search.route -> "Search"
-        currentDestination?.route == Screen.Streams.route -> "Streams"
-        currentDestination?.route == Screen.StreamEdit.route -> "Stream"
-        currentDestination?.route == Screen.More.route -> "More"
         currentDestination?.route == Screen.Radio.route -> "Radio"
+        currentDestination?.route == Screen.RadioStationEdit.route -> "Station"
+        currentDestination?.route == Screen.More.route -> "More"
         currentDestination?.route == Screen.Settings.route -> "Settings"
         currentDestination?.route == Screen.PlaylistEdit.route -> "Edit Playlist"
         currentDestination?.route == Screen.PlaylistAddSongs.route -> "Add Songs"

@@ -57,7 +57,12 @@ class CalmMusicSettingsManager(context: Context) {
      * to be hidden (it is the only path to Settings).
      */
     private fun normalizeTabSettings(settings: List<TabSetting>): List<TabSetting> {
-        val known = settings.filter { it.route in DEFAULT_TAB_ROUTES }.distinctBy { it.route }
+        // The Streams tab was renamed to Radio; remap any config saved under
+        // the old route so a user's existing order/visibility carries over.
+        val remapped = settings.map { setting ->
+            if (setting.route == "streams") setting.copy(route = "radio") else setting
+        }
+        val known = remapped.filter { it.route in DEFAULT_TAB_ROUTES }.distinctBy { it.route }
         val missing = DEFAULT_TAB_ROUTES
             .filter { route -> known.none { it.route == route } }
             .map { TabSetting(route = it, visible = true) }
@@ -123,6 +128,6 @@ class CalmMusicSettingsManager(context: Context) {
         const val TAB_ROUTE_MORE = "more"
 
         /** Canonical bottom-tab routes in default display order. */
-        val DEFAULT_TAB_ROUTES = listOf("playlists", "artists", "songs", "albums", "streams", TAB_ROUTE_MORE)
+        val DEFAULT_TAB_ROUTES = listOf("playlists", "artists", "songs", "albums", "radio", TAB_ROUTE_MORE)
     }
 }

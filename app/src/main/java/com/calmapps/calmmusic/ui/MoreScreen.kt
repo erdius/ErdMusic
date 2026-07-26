@@ -23,18 +23,11 @@ import com.mudita.mmd.components.text.TextMMD
 
 @Composable
 fun MoreScreen(
-    onNavigateToRadio: () -> Unit,
     onNavigateToSettings: () -> Unit,
 ) {
     LazyColumnMMD(
         modifier = Modifier.fillMaxSize(),
     ) {
-        item {
-            MoreMenuItem(
-                title = "Radio",
-                onClick = onNavigateToRadio
-            )
-        }
         item {
             MoreMenuItem(
                 title = "Settings",

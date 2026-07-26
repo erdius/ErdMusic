@@ -21,7 +21,7 @@ import com.mudita.mmd.components.buttons.ButtonMMD
 import com.mudita.mmd.components.buttons.OutlinedButtonMMD
 
 @Composable
-fun StreamEditScreen(
+fun RadioStationEditScreen(
     initialName: String,
     initialUrl: String,
     isEditing: Boolean,

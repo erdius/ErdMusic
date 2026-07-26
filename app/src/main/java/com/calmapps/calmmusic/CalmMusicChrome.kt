@@ -339,7 +339,6 @@ private fun CalmMusicTopAppBarActions(
     if (
         hasNowPlaying &&
         currentDestination?.route != Screen.PlaylistAddSongs.route &&
-        currentDestination?.route != Screen.Radio.route &&
         !(currentDestination?.route == Screen.Playlists.route && isPlaylistsEditMode) &&
         !(currentDestination?.route == Screen.PlaylistDetails.route && isPlaylistDetailsEditMode)
     ) {

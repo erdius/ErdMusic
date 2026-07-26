@@ -8,10 +8,6 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
-
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:name=".CalmMusic"
@@ -33,31 +29,8 @@
         </service>
 
         <service
-            android:name=".MediaNotificationListenerService"
-            android:label="@string/app_name"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-
-        <service
             android:name=".overlay.SystemOverlayService"
             android:exported="false" />
-
-        <service
-            android:name=".CalmMusicAccessibilityService"
-            android:exported="true"
-            android:label="ErdMusic Helper"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
 
         <activity
             android:name=".MainActivity"
@@ -71,7 +44,6 @@
     </application>
 
     <queries>
-        <package android:name="com.android.fmradio" />
         <intent>
             <action android:name="androidx.media3.session.MediaSessionService" />
         </intent>

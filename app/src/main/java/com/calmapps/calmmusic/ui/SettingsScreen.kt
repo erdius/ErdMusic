@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.calmapps.calmmusic.BuildConfig
 import com.calmapps.calmmusic.data.CalmMusicSettingsManager
 import com.calmapps.calmmusic.data.TabSetting
 import com.calmapps.calmmusic.navItems
@@ -62,8 +63,8 @@ fun SettingsScreen(
     localScanIndexedNewOrUpdated: Int?,
     localScanDeletedMissing: Int?,
 ) {
-    // 0 = General, 1 = Tabs, 2 = Local
-    val tabOptions = listOf("General", "Tabs", "Local")
+    // 0 = General, 1 = Tabs, 2 = Local, 3 = About
+    val tabOptions = listOf("General", "Tabs", "Local", "About")
 
     Column(
         modifier = Modifier
@@ -480,6 +481,48 @@ fun SettingsScreen(
                                 }
                             }
                         }
+                    }
+                }
+            }
+        } else if (selectedTab == 3) {
+            LazyColumnMMD(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 16.dp, top = 16.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.Top,
+            ) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 16.dp),
+                    ) {
+                        TextMMD(
+                            text = "ErdMusic",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        TextMMD(
+                            text = "Version ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
+                            fontSize = 16.sp,
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        TextMMD(
+                            text = "A calm, local-only music player for E-ink and de-googled devices.",
+                            fontSize = 14.sp,
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        TextMMD(
+                            text = "Based on CalmMusic by David Ray Wilson.",
+                            fontSize = 14.sp,
+                        )
                     }
                 }
             }
