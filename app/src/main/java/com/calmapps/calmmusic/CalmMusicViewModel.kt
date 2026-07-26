@@ -58,6 +58,7 @@ class CalmMusicViewModel(
     private var localPlaybackMonitorJob: Job? = null
 
     private var lastCompletedSongId: String? = null
+    private var lastProcessedIcyTitle: String? = null
 
     private val _librarySongs = MutableStateFlow<List<SongUiModel>>(emptyList())
     val librarySongs: StateFlow<List<SongUiModel>> = _librarySongs
@@ -298,6 +299,12 @@ class CalmMusicViewModel(
 
         val song = queue[startIndex]
         val repeatMode = previous.repeatMode
+
+        if (song.sourceType == "INTERNET_RADIO") {
+            // Fresh station tune-in: any previously tracked ICY title is stale.
+            lastProcessedIcyTitle = null
+            app.playbackStateManager.updateIcyStreamTitle(null)
+        }
 
         val queueEntities = queue.map { it.toQueueEntity() }
 
@@ -605,12 +612,16 @@ class CalmMusicViewModel(
                 // UI can show a real artist instead of the static placeholder
                 // set when the station was first tuned in.
                 if (isRadio) {
-                    val liveTitle = controller.mediaMetadata.title?.toString()?.trim()
+                    // ICY in-band metadata does not merge into
+                    // Player/MediaController.mediaMetadata; PlaybackService
+                    // captures it separately from the raw onMetadata callback.
+                    val liveTitle = app.playbackStateManager.state.value.icyStreamTitle?.trim()
                     // Temporary diagnostic: always capture the raw value we see,
                     // regardless of whether it triggers a parse below.
                     newState = newState.copy(debugIcyRawTitle = liveTitle ?: "(null)")
                     val radioSong = newState.nowPlayingSong
-                    if (!liveTitle.isNullOrBlank() && radioSong != null && liveTitle != radioSong.title) {
+                    if (!liveTitle.isNullOrBlank() && radioSong != null && liveTitle != lastProcessedIcyTitle) {
+                        lastProcessedIcyTitle = liveTitle
                         val parts = liveTitle.split(Regex("\\s+[-–]\\s+"), limit = 2)
                         val (parsedArtist, parsedTitle) = if (parts.size == 2) {
                             parts[0].trim() to parts[1].trim()

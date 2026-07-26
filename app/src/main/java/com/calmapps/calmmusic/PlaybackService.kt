@@ -77,6 +77,9 @@ class PlaybackService : MediaSessionService() {
                 super.onMediaItemTransition(mediaItem, reason)
                 val meta = mediaItem?.mediaMetadata
                 if (meta != null) {
+                    // A fresh MediaItem means any previous station's live
+                    // metadata is stale until new ICY data arrives.
+                    (application as? CalmMusic)?.playbackStateManager?.updateIcyStreamTitle(null)
                     (application as? CalmMusic)?.playbackStateManager?.updateState(
                         songId = mediaItem.mediaId,
                         title = meta.title?.toString() ?: "Unknown Title",
@@ -84,6 +87,22 @@ class PlaybackService : MediaSessionService() {
                         isPlaying = player.isPlaying,
                         sourceType = "LOCAL_FILE",
                     )
+                }
+            }
+
+            // Icecast/Shoutcast in-band "StreamTitle" metadata arrives as an
+            // IcyInfo entry here. It does NOT get merged into
+            // Player.mediaMetadata / MediaController.mediaMetadata, so it must
+            // be read from this raw callback rather than polled from the
+            // controller.
+            override fun onMetadata(metadata: androidx.media3.common.Metadata) {
+                super.onMetadata(metadata)
+                for (i in 0 until metadata.length()) {
+                    val entry = metadata.get(i)
+                    if (entry is androidx.media3.extractor.metadata.icy.IcyInfo) {
+                        (application as? CalmMusic)?.playbackStateManager
+                            ?.updateIcyStreamTitle(entry.title)
+                    }
                 }
             }
         })

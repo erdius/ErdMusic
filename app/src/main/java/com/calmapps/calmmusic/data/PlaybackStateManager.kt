@@ -12,7 +12,9 @@ data class OverlayState(
     val isPlaying: Boolean = false,
     val sourceType: String? = null,
     val streamResolverLabel: String? = null,
-    val isAppInForeground: Boolean = true // Default to true so overlay starts hidden
+    val isAppInForeground: Boolean = true, // Default to true so overlay starts hidden
+    /** Raw live "StreamTitle" from an Icecast/Shoutcast station's in-band ICY metadata. */
+    val icyStreamTitle: String? = null,
 )
 
 class PlaybackStateManager {
@@ -51,6 +53,12 @@ class PlaybackStateManager {
         val current = _state.value
         if (current.streamResolverLabel == label) return
         _state.value = current.copy(streamResolverLabel = label)
+    }
+
+    fun updateIcyStreamTitle(title: String?) {
+        val current = _state.value
+        if (current.icyStreamTitle == title) return
+        _state.value = current.copy(icyStreamTitle = title)
     }
 
     fun updatePlaybackStatus(isPlaying: Boolean) {
@@ -98,6 +106,7 @@ class PlaybackStateManager {
             isPlaying = false,
             sourceType = null,
             streamResolverLabel = null,
+            icyStreamTitle = null,
         )
     }
 }
