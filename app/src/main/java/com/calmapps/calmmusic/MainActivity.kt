@@ -1030,10 +1030,17 @@ fun CalmMusic(app: CalmMusic) {
                             ?.takeIf { it.sourceType == "INTERNET_RADIO" }?.id,
                         isPlaying = isPlaybackPlaying,
                         onStationClick = { station ->
+                            // title/artist here are placeholders shown until the
+                            // station's live ICY "StreamTitle" metadata arrives
+                            // (see CalmMusicViewModel.startLocalPlaybackMonitoring),
+                            // at which point they're replaced with the real track
+                            // info. The station name is kept in `album` so it's
+                            // never lost once that happens.
                             val song = SongUiModel(
                                 id = station.id,
                                 title = station.name,
-                                artist = "Internet Radio",
+                                artist = "",
+                                album = station.name,
                                 sourceType = "INTERNET_RADIO",
                                 audioUri = station.url,
                             )
@@ -1272,7 +1279,13 @@ fun CalmMusic(app: CalmMusic) {
 
             NowPlayingScreen(
                 title = song.title,
-                artist = song.artist.ifBlank { if (song.sourceType == "LOCAL_FILE" || song.sourceType == "YOUTUBE_DOWNLOAD") "Local file" else "" },
+                artist = song.artist.ifBlank {
+                    when (song.sourceType) {
+                        "LOCAL_FILE", "YOUTUBE_DOWNLOAD" -> "Local file"
+                        "INTERNET_RADIO" -> "Live stream"
+                        else -> ""
+                    }
+                },
                 album = song.album,
                 isPlaying = playbackState.isPlaybackPlaying,
                 isLoading = playbackState.isBuffering,

@@ -598,6 +598,37 @@ class CalmMusicViewModel(
                     }
                 }
 
+                // Icecast/Shoutcast servers broadcast a live "StreamTitle" as
+                // ICY metadata, which Media3 automatically merges into the
+                // player's MediaMetadata.title as the track changes. It is
+                // conventionally formatted "Artist - Title"; split it so the
+                // UI can show a real artist instead of the static placeholder
+                // set when the station was first tuned in.
+                if (isRadio) {
+                    val liveTitle = controller.mediaMetadata.title?.toString()?.trim()
+                    val radioSong = newState.nowPlayingSong
+                    if (!liveTitle.isNullOrBlank() && radioSong != null && liveTitle != radioSong.title) {
+                        val parts = liveTitle.split(Regex("\\s+[-–]\\s+"), limit = 2)
+                        val (parsedArtist, parsedTitle) = if (parts.size == 2) {
+                            parts[0].trim() to parts[1].trim()
+                        } else {
+                            "" to liveTitle
+                        }
+                        val updatedSong = radioSong.copy(title = parsedTitle, artist = parsedArtist)
+                        val idx = newState.playbackQueueIndex
+                        val updatedQueue = if (idx != null && idx in newState.playbackQueue.indices) {
+                            newState.playbackQueue.toMutableList().also { it[idx] = updatedSong }
+                        } else {
+                            newState.playbackQueue
+                        }
+                        newState = newState.copy(
+                            nowPlayingSong = updatedSong,
+                            playbackQueue = updatedQueue,
+                            playbackQueueEntities = updatedQueue.map { it.toQueueEntity() },
+                        )
+                    }
+                }
+
                 // Handle End-of-Track / End-of-Segment Auto-Advance
                 if (playbackState == Player.STATE_ENDED && currentSong != null) {
                     val songId = currentSong.id
