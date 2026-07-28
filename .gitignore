@@ -26,6 +26,7 @@ outputs/
 # Signing keys (if ever added locally)
 *.jks
 *.keystore
+/keystore.properties
 
 # Misc
 /local.properties
