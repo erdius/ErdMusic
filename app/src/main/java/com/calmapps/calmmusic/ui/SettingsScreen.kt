@@ -1,6 +1,7 @@
 package com.calmapps.calmmusic.ui
 
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,10 @@ fun SettingsScreen(
     localFolders: List<String>,
     hasBatteryOptimizationExemption: Boolean,
     onRequestBatteryOptimizationExemption: () -> Unit,
+    isDuraSpeedAvailable: Boolean,
+    duraspeedConfirmed: Boolean,
+    onDuraSpeedConfirmedChange: (Boolean) -> Unit,
+    onOpenDuraSpeed: () -> Unit,
     onAddFolderClick: () -> Unit,
     onRemoveFolderClick: (String) -> Unit,
     onRescanLocalMusicClick: () -> Unit,
@@ -128,6 +133,38 @@ fun SettingsScreen(
                                     "Allow ErdMusic to run in background"
                                 },
                                 fontSize = 16.sp,
+                            )
+                        }
+                    }
+                }
+
+                if (isDuraSpeedAvailable) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(end = 16.dp, top = 16.dp)
+                                .clickable { onOpenDuraSpeed() },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                TextMMD(
+                                    text = "DuraSpeed",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                TextMMD(
+                                    text = if (duraspeedConfirmed) {
+                                        "Confirmed whitelisted (tap to open DuraSpeed)"
+                                    } else {
+                                        "Ensure ErdMusic is toggled ON in DuraSpeed settings, then mark it done here"
+                                    },
+                                    fontSize = 14.sp,
+                                )
+                            }
+                            SwitchMMD(
+                                checked = duraspeedConfirmed,
+                                onCheckedChange = onDuraSpeedConfirmedChange,
                             )
                         }
                     }

@@ -105,12 +105,23 @@ class CalmMusicSettingsManager(context: Context) {
         prefs.edit { putBoolean(KEY_HAS_COMPLETED_PERMISSIONS_ONBOARDING, completed) }
     }
 
+    // DuraSpeed (MediaTek's background-app killer) whitelist state can't be
+    // queried from a third-party app, so this is self-reported by the user.
+    private val _duraspeedConfirmed = MutableStateFlow(prefs.getBoolean(KEY_DURASPEED_CONFIRMED, false))
+    val duraspeedConfirmed: StateFlow<Boolean> = _duraspeedConfirmed.asStateFlow()
+
+    fun setDuraspeedConfirmed(confirmed: Boolean) {
+        prefs.edit { putBoolean(KEY_DURASPEED_CONFIRMED, confirmed) }
+        _duraspeedConfirmed.value = confirmed
+    }
+
     companion object {
         private const val PREFS_NAME = "calmmusic_settings"
         private const val KEY_LOCAL_MUSIC_FOLDERS = "local_music_folders"
         private const val KEY_LAST_LOCAL_LIBRARY_SCAN_MILLIS = "last_local_library_scan_millis"
         private const val KEY_HAS_COMPLETED_PERMISSIONS_ONBOARDING = "has_completed_permissions_onboarding"
         private const val KEY_TAB_SETTINGS = "bottom_tab_settings"
+        private const val KEY_DURASPEED_CONFIRMED = "duraspeed_confirmed"
 
         const val TAB_ROUTE_MORE = "more"
 

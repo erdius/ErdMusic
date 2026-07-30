@@ -1183,6 +1183,20 @@ fun CalmMusic(app: CalmMusic) {
                         }
                     }
 
+                    // DuraSpeed (MediaTek's background-app killer, present on some
+                    // devices including the Mudita Kompakt) can silently stop playback
+                    // even with the battery-optimization exemption granted -- it's a
+                    // separate OEM-specific mechanism. Only show the row if present.
+                    val isDuraSpeedAvailable = remember {
+                        try {
+                            context.packageManager.getPackageInfo("com.mediatek.duraspeed", 0)
+                            true
+                        } catch (e: Exception) {
+                            false
+                        }
+                    }
+                    val duraspeedConfirmed by settingsManager.duraspeedConfirmed.collectAsState()
+
                     SettingsScreen(
                         selectedTab = settingsSelectedTab,
                         onSelectedTabChange = { settingsSelectedTab = it },
@@ -1191,6 +1205,32 @@ fun CalmMusic(app: CalmMusic) {
                         localFolders = localMusicFolders.toList(),
                         hasBatteryOptimizationExemption = hasBatteryOptimizationExemption,
                         onRequestBatteryOptimizationExemption = { requestBatteryOptimizationExemption() },
+                        isDuraSpeedAvailable = isDuraSpeedAvailable,
+                        duraspeedConfirmed = duraspeedConfirmed,
+                        onDuraSpeedConfirmedChange = { settingsManager.setDuraspeedConfirmed(it) },
+                        onOpenDuraSpeed = {
+                            try {
+                                val intent = context.packageManager.getLaunchIntentForPackage("com.mediatek.duraspeed")
+                                if (intent != null) {
+                                    context.startActivity(intent)
+                                } else {
+                                    val explicitIntent = Intent().apply {
+                                        component = ComponentName("com.mediatek.duraspeed", "com.mediatek.duraspeed.DuraSpeedMainActivity")
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    }
+                                    context.startActivity(explicitIntent)
+                                }
+                            } catch (e: Exception) {
+                                try {
+                                    val appInfoIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = "package:com.mediatek.duraspeed".toUri()
+                                    }
+                                    context.startActivity(appInfoIntent)
+                                } catch (e2: Exception) {
+                                    context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                }
+                            }
+                        },
                         onAddFolderClick = {
                             folderPickerLauncher.launch(null)
                         },
