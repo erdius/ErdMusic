@@ -10,9 +10,6 @@ import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -51,6 +48,7 @@ import com.calmapps.calmmusic.CalmMusic
 import com.calmapps.calmmusic.MainActivity
 import com.calmapps.calmmusic.PlaybackService
 import com.calmapps.calmmusic.data.PlaybackStateManager
+import com.mudita.mmd.ThemeMMD
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -151,7 +149,9 @@ class SystemOverlayService : Service() {
             })
 
             setContent {
-                OverlayContent()
+                ThemeMMD {
+                    OverlayContent()
+                }
             }
         }
 
@@ -172,11 +172,8 @@ class SystemOverlayService : Service() {
 
         val showOverlay = !state.isAppInForeground && state.songId != null
 
-        AnimatedVisibility(
-            visible = showOverlay,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
+        // Shown/hidden immediately, no fade -- avoids visible motion on e-ink.
+        if (showOverlay) {
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(24.dp))
@@ -325,18 +322,20 @@ class SystemOverlayService : Service() {
             })
 
             setContent {
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.7f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Close,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
+                ThemeMMD {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.7f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
             }
         }

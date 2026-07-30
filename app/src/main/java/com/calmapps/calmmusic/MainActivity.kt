@@ -68,6 +68,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.navigation.NavDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
@@ -934,6 +936,11 @@ fun CalmMusic(app: CalmMusic) {
                 navController = navController,
                 startDestination = startDestination,
                 modifier = Modifier.padding(paddingValues),
+                // No animated slide/fade between screens -- avoids visible motion on e-ink.
+                enterTransition = { EnterTransition.None },
+                exitTransition = { ExitTransition.None },
+                popEnterTransition = { EnterTransition.None },
+                popExitTransition = { ExitTransition.None },
             ) {
                 playlistsNavGraph()
 
