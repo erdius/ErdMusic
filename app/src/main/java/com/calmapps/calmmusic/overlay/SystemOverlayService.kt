@@ -10,6 +10,7 @@ import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -48,6 +50,7 @@ import com.calmapps.calmmusic.CalmMusic
 import com.calmapps.calmmusic.MainActivity
 import com.calmapps.calmmusic.PlaybackService
 import com.calmapps.calmmusic.data.PlaybackStateManager
+import com.calmapps.calmmusic.ui.NoRippleIndication
 import com.mudita.mmd.ThemeMMD
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -150,7 +153,9 @@ class SystemOverlayService : Service() {
 
             setContent {
                 ThemeMMD {
-                    OverlayContent()
+                    CompositionLocalProvider(LocalIndication provides NoRippleIndication) {
+                        OverlayContent()
+                    }
                 }
             }
         }
