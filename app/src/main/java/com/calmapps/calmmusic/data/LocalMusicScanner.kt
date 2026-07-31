@@ -5,6 +5,9 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.jaudiotagger.audio.AudioFileIO
 import org.jaudiotagger.tag.FieldKey
 import org.jaudiotagger.tag.TagOptionSingleton
@@ -159,7 +162,7 @@ object LocalMusicScanner {
         return result
     }
 
-    fun buildSongEntityFromFile(
+    suspend fun buildSongEntityFromFile(
         context: Context,
         uri: Uri,
         name: String,
@@ -228,66 +231,97 @@ object LocalMusicScanner {
         val year: Int?,
     )
 
-    private fun extractMetadata(context: Context, uri: Uri): LocalMetadata {
-        val retriever = MediaMetadataRetriever()
-        var meta = try {
-            retriever.setDataSource(context, uri)
+    // MediaMetadataRetriever.setDataSource and jaudiotagger's file read are
+    // plain blocking calls with no cancellation support; on a corrupt/odd
+    // file either one can hang indefinitely with no exception thrown, which
+    // would otherwise stall the whole scan forever on a single bad file.
+    // withTimeoutOrNull can't interrupt a raw blocking call directly, but
+    // dispatching it onto Dispatchers.IO decouples the wait from the block:
+    // on timeout this suspends past it and the scan moves on, leaving at
+    // worst an orphaned IO-pool thread for that one file instead of a
+    // permanently stuck scan.
+    private const val METADATA_TIMEOUT_MILLIS = 10_000L
 
-            val rawTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-            val rawArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
-            val rawAlbumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
-            val rawAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+    // Tag data (ID3v2 headers, Vorbis comments, embedded cover art) lives
+    // near the start of the file; copying the full file (tens of MB for a
+    // FLAC track) just to read a few KB of tags made every fallback-tagged
+    // file dramatically slower than it needed to be.
+    private const val TAG_PROBE_MAX_BYTES = 5L * 1024 * 1024
 
-            val discStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
-            val trackStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
-            val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            val yearStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
+    private suspend fun extractMetadata(context: Context, uri: Uri): LocalMetadata {
+        var meta = withTimeoutOrNull(METADATA_TIMEOUT_MILLIS) {
+            withContext(Dispatchers.IO) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, uri)
 
-            LocalMetadata(
-                title = rawTitle.normalizeTagString(),
-                artist = rawArtist.normalizeTagString(),
-                albumArtist = rawAlbumArtist.normalizeTagString(),
-                album = rawAlbum.normalizeTagString(),
-                discNumber = discStr?.substringBefore('/')?.trim()?.toIntOrNull(),
-                trackNumber = trackStr?.substringBefore('/')?.trim()?.toIntOrNull(),
-                durationMillis = durationStr?.toLongOrNull(),
-                year = yearStr?.take(4)?.trim()?.toIntOrNull(),
-            )
-        } catch (_: Exception) {
-            LocalMetadata(null, null, null, null, null, null, null, null)
-        } finally {
-            try {
-                retriever.release()
-            } catch (_: Exception) {
+                    val rawTitle = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                    val rawArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                    val rawAlbumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+                    val rawAlbum = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+
+                    val discStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
+                    val trackStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+                    val durationStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    val yearStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
+
+                    LocalMetadata(
+                        title = rawTitle.normalizeTagString(),
+                        artist = rawArtist.normalizeTagString(),
+                        albumArtist = rawAlbumArtist.normalizeTagString(),
+                        album = rawAlbum.normalizeTagString(),
+                        discNumber = discStr?.substringBefore('/')?.trim()?.toIntOrNull(),
+                        trackNumber = trackStr?.substringBefore('/')?.trim()?.toIntOrNull(),
+                        durationMillis = durationStr?.toLongOrNull(),
+                        year = yearStr?.take(4)?.trim()?.toIntOrNull(),
+                    )
+                } catch (_: Exception) {
+                    LocalMetadata(null, null, null, null, null, null, null, null)
+                } finally {
+                    try {
+                        retriever.release()
+                    } catch (_: Exception) {
+                    }
+                }
             }
-        }
+        } ?: LocalMetadata(null, null, null, null, null, null, null, null)
 
         if (meta.albumArtist.isNullOrBlank()) {
-            val tempFile = copyUriToTempFile(context, uri)
-            if (tempFile != null) {
-                try {
-                    TagOptionSingleton.getInstance().isAndroid = true
+            val deepMeta = withTimeoutOrNull(METADATA_TIMEOUT_MILLIS) {
+                withContext(Dispatchers.IO) {
+                    val tempFile = copyUriToTempFile(context, uri, TAG_PROBE_MAX_BYTES)
+                    if (tempFile != null) {
+                        try {
+                            TagOptionSingleton.getInstance().isAndroid = true
 
-                    val audioFile = AudioFileIO.read(tempFile)
-                    val tag = audioFile.tag
-                    if (tag != null) {
-                        val deepAlbumArtist = tag.getFirst(FieldKey.ALBUM_ARTIST)
-
-                        if (!deepAlbumArtist.isNullOrBlank()) {
-                            meta = meta.copy(albumArtist = deepAlbumArtist.normalizeTagString())
+                            val audioFile = AudioFileIO.read(tempFile)
+                            audioFile.tag
+                        } catch (_: Exception) {
+                            // Ignore deep scan failures (including a
+                            // truncated-tag parse from the size cap above).
+                            null
+                        } finally {
+                            tempFile.delete()
                         }
-
-                        if (meta.artist.isNullOrBlank()) {
-                            meta = meta.copy(artist = tag.getFirst(FieldKey.ARTIST).normalizeTagString())
-                        }
-                        if (meta.album.isNullOrBlank()) {
-                            meta = meta.copy(album = tag.getFirst(FieldKey.ALBUM).normalizeTagString())
-                        }
+                    } else {
+                        null
                     }
-                } catch (_: Exception) {
-                    // Ignore deep scan failures
-                } finally {
-                    tempFile.delete()
+                }
+            }
+
+            val tag = deepMeta
+            if (tag != null) {
+                val deepAlbumArtist = tag.getFirst(FieldKey.ALBUM_ARTIST)
+
+                if (!deepAlbumArtist.isNullOrBlank()) {
+                    meta = meta.copy(albumArtist = deepAlbumArtist.normalizeTagString())
+                }
+
+                if (meta.artist.isNullOrBlank()) {
+                    meta = meta.copy(artist = tag.getFirst(FieldKey.ARTIST).normalizeTagString())
+                }
+                if (meta.album.isNullOrBlank()) {
+                    meta = meta.copy(album = tag.getFirst(FieldKey.ALBUM).normalizeTagString())
                 }
             }
         }
@@ -295,17 +329,30 @@ object LocalMusicScanner {
         return meta
     }
 
-    private fun copyUriToTempFile(context: Context, uri: Uri): File? {
+    private fun copyUriToTempFile(context: Context, uri: Uri, maxBytes: Long): File? {
         return try {
             val inputStream = context.contentResolver.openInputStream(uri) ?: return null
             val tempFile = File.createTempFile("scanner_probe", ".tmp", context.cacheDir)
             FileOutputStream(tempFile).use { output ->
-                inputStream.copyTo(output)
+                inputStream.copyTo(output, maxBytes)
             }
             inputStream.close()
             tempFile
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /** Like [java.io.InputStream.copyTo], but stops after [limit] bytes. */
+    private fun java.io.InputStream.copyTo(out: java.io.OutputStream, limit: Long) {
+        val buffer = ByteArray(64 * 1024)
+        var remaining = limit
+        while (remaining > 0) {
+            val toRead = minOf(buffer.size.toLong(), remaining).toInt()
+            val read = this.read(buffer, 0, toRead)
+            if (read < 0) break
+            out.write(buffer, 0, read)
+            remaining -= read
         }
     }
 }
