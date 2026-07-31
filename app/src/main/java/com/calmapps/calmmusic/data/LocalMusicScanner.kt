@@ -35,7 +35,8 @@ object LocalMusicScanner {
         folderUris: Set<String>,
         existingSongsByUri: Map<String, SongEntity> = emptyMap(),
         lastScanMillis: Long = 0L,
-        onProgress: suspend (processed: Int, total: Int) -> Unit = { _, _ -> },
+        onDiscoveryProgress: suspend (foldersVisited: Int, filesFound: Int) -> Unit = { _, _ -> },
+        onProgress: suspend (processed: Int, total: Int, currentFileName: String) -> Unit = { _, _, _ -> },
     ): List<ScannedLocalAudio> {
         val result = mutableListOf<ScannedLocalAudio>()
 
@@ -48,6 +49,8 @@ object LocalMusicScanner {
         )
 
         val candidates = mutableListOf<Candidate>()
+        var foldersVisited = 0
+        var lastDiscoveryUpdateTime = 0L
 
         for (uriString in folderUris) {
             val treeUri = try {
@@ -61,6 +64,7 @@ object LocalMusicScanner {
 
             while (stack.isNotEmpty()) {
                 val dir = stack.removeFirst()
+                foldersVisited++
                 val children = try {
                     dir.listFiles().toList()
                 } catch (_: Exception) {
@@ -92,11 +96,22 @@ object LocalMusicScanner {
                         }
                     }
                 }
+
+                // The folder walk itself (SAF listFiles() calls) can take a
+                // long time on a large SD card before a single audio file
+                // is even found, so report progress here too -- otherwise
+                // the UI has nothing to show and looks identical to a hang.
+                val now = System.currentTimeMillis()
+                if (now - lastDiscoveryUpdateTime > 200L) {
+                    lastDiscoveryUpdateTime = now
+                    onDiscoveryProgress(foldersVisited, candidates.size)
+                }
             }
         }
+        onDiscoveryProgress(foldersVisited, candidates.size)
 
         if (candidates.isEmpty()) {
-            onProgress(0, 0)
+            onProgress(0, 0, "")
             return emptyList()
         }
 
@@ -121,11 +136,11 @@ object LocalMusicScanner {
         var processed = 0
         var lastProgressUpdateTime = 0L
 
-        suspend fun maybeReportProgress() {
+        suspend fun maybeReportProgress(currentFileName: String) {
             val now = System.currentTimeMillis()
             if (processed == total || now - lastProgressUpdateTime > 200L) {
                 lastProgressUpdateTime = now
-                onProgress(processed, total)
+                onProgress(processed, total, currentFileName)
             }
         }
 
@@ -138,9 +153,14 @@ object LocalMusicScanner {
             ) {
                 result.add(ScannedLocalAudio(existing, null))
                 processed++
-                maybeReportProgress()
+                maybeReportProgress(candidate.name)
                 continue
             }
+
+            // Reported before the (potentially slow, now timeout-bounded)
+            // metadata read below, so a file that's taking a while still
+            // shows as "currently on this one" instead of looking stuck.
+            onProgress(processed, total, candidate.name)
 
             val scanned = buildSongEntityFromFile(
                 context = context,
@@ -154,10 +174,10 @@ object LocalMusicScanner {
             result.add(scanned)
 
             processed++
-            maybeReportProgress()
+            maybeReportProgress(candidate.name)
         }
 
-        onProgress(processed, total.coerceAtLeast(processed))
+        onProgress(processed, total.coerceAtLeast(processed), "")
 
         return result
     }

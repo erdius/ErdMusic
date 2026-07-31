@@ -42,6 +42,7 @@ class LibraryRepository(
         folders: Set<String>,
         onScanProgress: (Float) -> Unit,
         onIngestProgress: (Float) -> Unit,
+        onScanStatus: (String) -> Unit = {},
     ): LocalResyncResult {
         var error: String? = null
         var stats: LocalResyncStats? = null
@@ -65,14 +66,28 @@ class LibraryRepository(
                             folderUris = folders,
                             existingSongsByUri = existingByUri,
                             lastScanMillis = lastScanMillis,
-                        ) { processed, total ->
-                            val progress = if (total > 0) {
-                                (processed.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-                            } else {
-                                1f
-                            }
-                            onScanProgress(progress)
-                        }
+                            onDiscoveryProgress = { foldersVisited, filesFound ->
+                                onScanStatus(
+                                    "Looking for audio files… $filesFound found in $foldersVisited folder" +
+                                        if (foldersVisited == 1) "" else "s",
+                                )
+                            },
+                            onProgress = { processed, total, currentFileName ->
+                                val progress = if (total > 0) {
+                                    (processed.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                                } else {
+                                    1f
+                                }
+                                onScanProgress(progress)
+                                onScanStatus(
+                                    if (total > 0 && currentFileName.isNotEmpty()) {
+                                        "Reading $currentFileName ($processed of $total)"
+                                    } else {
+                                        ""
+                                    },
+                                )
+                            },
+                        )
                         scanned to existingLocalSongs
                     }
 

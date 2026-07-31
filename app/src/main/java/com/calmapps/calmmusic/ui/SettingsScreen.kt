@@ -59,6 +59,7 @@ fun SettingsScreen(
     onRescanLocalMusicClick: () -> Unit,
     isRescanningLocal: Boolean,
     localScanProgress: Float,
+    localScanStatus: String,
     isIngestingLocal: Boolean,
     localIngestProgress: Float,
     localScanTotalDiscovered: Int?,
@@ -366,6 +367,13 @@ fun SettingsScreen(
                                         text = "Step 1 of 2 – Scanning folders for audio files… $percent%",
                                         fontSize = 14.sp,
                                     )
+                                    if (localScanStatus.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        TextMMD(
+                                            text = localScanStatus,
+                                            fontSize = 13.sp,
+                                        )
+                                    }
                                     if (localScanTotalDiscovered != null && localScanSkippedUnchanged != null && localScanIndexedNewOrUpdated != null) {
                                         Spacer(modifier = Modifier.height(4.dp))
                                         TextMMD(

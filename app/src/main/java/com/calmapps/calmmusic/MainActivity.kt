@@ -300,6 +300,7 @@ fun CalmMusic(app: CalmMusic) {
 
     var isRescanningLocal by remember { mutableStateOf(false) }
     var localScanProgress by remember { mutableStateOf(0f) }
+    var localScanStatus by remember { mutableStateOf("") }
     var isIngestingLocal by remember { mutableStateOf(false) }
     var localIngestProgress by remember { mutableStateOf(0f) }
     var localScanTotalDiscovered by remember { mutableStateOf<Int?>(null) }
@@ -333,6 +334,7 @@ fun CalmMusic(app: CalmMusic) {
         if (isRescanningLocal) return
         isRescanningLocal = true
         localScanProgress = 0f
+        localScanStatus = ""
         isIngestingLocal = false
         localIngestProgress = 0f
         localScanTotalDiscovered = null
@@ -349,6 +351,9 @@ fun CalmMusic(app: CalmMusic) {
                 onIngestProgress = { progress ->
                     isIngestingLocal = true
                     localIngestProgress = progress.coerceIn(0f, 1f)
+                },
+                onScanStatus = { status ->
+                    localScanStatus = status
                 },
             )
 
@@ -1244,6 +1249,7 @@ fun CalmMusic(app: CalmMusic) {
                         },
                         isRescanningLocal = isRescanningLocal,
                         localScanProgress = localScanProgress,
+                        localScanStatus = localScanStatus,
                         isIngestingLocal = isIngestingLocal,
                         localIngestProgress = localIngestProgress,
                         localScanTotalDiscovered = localScanTotalDiscovered,

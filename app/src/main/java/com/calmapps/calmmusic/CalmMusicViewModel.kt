@@ -699,11 +699,13 @@ class CalmMusicViewModel(
         folders: Set<String>,
         onScanProgress: (Float) -> Unit,
         onIngestProgress: (Float) -> Unit,
+        onScanStatus: (String) -> Unit = {},
     ): LibraryRepository.LocalResyncResult {
         val result = libraryRepository.resyncLocalLibrary(
             folders,
             onScanProgress,
-            onIngestProgress
+            onIngestProgress,
+            onScanStatus,
         )
 
         refreshLibraryFromDatabase()
