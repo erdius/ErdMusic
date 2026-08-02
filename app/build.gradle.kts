@@ -19,8 +19,8 @@ android {
         applicationId = "com.erdman.erdmusic"
         minSdk = 28
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.2.3"
+        versionCode = 16
+        versionName = "1.2.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
