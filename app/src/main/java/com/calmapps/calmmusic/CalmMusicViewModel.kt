@@ -59,6 +59,7 @@ class CalmMusicViewModel(
 
     private var lastCompletedSongId: String? = null
     private var lastProcessedIcyTitle: String? = null
+    private var lastPlaybackSnapshotPersistMs: Long = 0L
 
     private val _librarySongs = MutableStateFlow<List<SongUiModel>>(emptyList())
     val librarySongs: StateFlow<List<SongUiModel>> = _librarySongs
@@ -683,7 +684,29 @@ class CalmMusicViewModel(
 
                 if (!didAutoAdvance && newState != state) {
                     _playbackState.value = newState
-                    persistPlaybackSnapshot(newState)
+
+                    // Position advances on nearly every tick during
+                    // playback, so persisting on every state change meant
+                    // rewriting the whole SharedPreferences file up to
+                    // 5x/second -- a real, measured contributor to
+                    // ErdMusic's background CPU/battery cost. Position only
+                    // needs to survive a crash/kill closely enough to
+                    // resume near where playback left off, so throttle
+                    // plain position ticks and persist immediately only for
+                    // changes that actually matter.
+                    val structurallyChanged =
+                        newState.playbackQueueIndex != state.playbackQueueIndex ||
+                            newState.isPlaybackPlaying != state.isPlaybackPlaying ||
+                            newState.repeatMode != state.repeatMode ||
+                            newState.isShuffleOn != state.isShuffleOn ||
+                            newState.nowPlayingSong?.id != state.nowPlayingSong?.id
+                    val now = System.currentTimeMillis()
+                    if (structurallyChanged ||
+                        now - lastPlaybackSnapshotPersistMs > PLAYBACK_SNAPSHOT_PERSIST_INTERVAL_MS
+                    ) {
+                        lastPlaybackSnapshotPersistMs = now
+                        persistPlaybackSnapshot(newState)
+                    }
                 }
 
                 val nextDelayMs = when {
@@ -1026,6 +1049,8 @@ class CalmMusicViewModel(
     }
 
     companion object {
+        private const val PLAYBACK_SNAPSHOT_PERSIST_INTERVAL_MS = 5_000L
+
         fun factory(application: Application): ViewModelProvider.Factory =
             object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
